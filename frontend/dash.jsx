@@ -100,7 +100,7 @@ function App() {
   const pickB = (id) => { if (id !== sideA) setSideB(id); };
   const startRound = () => {
     pushToCrowd('tug-genres', { sideA, sideB });
-    showToast('Round started ✓', 'magenta');
+    showToast('Genres sent ✓', 'magenta');
   };
   const gA = genreById(sideA), gB = genreById(sideB);
 
@@ -224,8 +224,8 @@ function App() {
               </div>
             </div>
             <div className="panel-foot">
-              <button className="push-btn" onClick={startRound} style={{ '--accent': '#FF1A8C' }}>
-                Start round / Push to crowd
+              <button id="genreRoundButton" className="push-btn" onClick={startRound} style={{ '--accent': '#FF1A8C' }}>
+                Start show with selected genres
               </button>
             </div>
           </div>

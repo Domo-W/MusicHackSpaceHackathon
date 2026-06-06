@@ -46,6 +46,17 @@ export type Side = "A" | "B";
 // always playing (or cold-start silent) while the next round collects.
 export type Phase = "idle" | "collecting" | "generating" | "playing";
 
+export interface ShowState {
+  started: boolean;
+  held: boolean;
+  phase: Phase;
+  round: number;
+  genres: { A: GenreInfo; B: GenreInfo };
+  genreSource: "auto" | "dj";
+  seed?: Seed;
+  error?: string;
+}
+
 // ---------------- client → server ----------------
 export type ClientMsg =
   // phone / audience
@@ -56,16 +67,16 @@ export type ClientMsg =
   | { type: "playing"; id: string } // a song became the current track
   // dashboard control
   | { type: "start" }
-  | { type: "config"; question?: string; genreA?: GenreInfo; genreB?: GenreInfo; collectSeconds?: number }
+  | { type: "config"; question?: string; genreA?: GenreInfo; genreB?: GenreInfo; collectSeconds?: number; genreOverride?: boolean }
   | { type: "skip" } // drop the queued/generating song, re-run the round
   | { type: "hold" } // keep current playing, pause advancing
   | { type: "resume" } // undo hold
   | { type: "reset" } // blank slate — back to the lobby
   | { type: "end" } // end the show — phones show the recap, stage shows the finale
   | { type: "endVote" } // force the collecting round to resolve now (testing)
-  | { type: "forceNext" } // force the stage to crossfade the next song in now
+  | { type: "forceNext" } // force the stage to transition to the next song now
   | { type: "playbackControl"; action: "play" | "pause" } // dashboard → stage
-  | { type: "playbackState"; playing: boolean; canSkip: boolean; song?: Song }; // stage → server
+  | { type: "playbackState"; playing: boolean; canSkip: boolean; song?: Song; nextSong?: Song }; // stage → server
 
 // ---------------- server → clients ----------------
 export type ServerMsg =
@@ -92,6 +103,7 @@ export type ServerMsg =
   // a collecting round resolved: winning genre + the selected participant
   | { type: "round_result"; winner: Side; genre: string; name: string; answer: string; roundIndex: number }
   | { type: "generating"; seed: Seed; roundIndex: number }
+  | { type: "generation_failed"; id: string; message: string }
   | { type: "song_ready"; song: Song } // streamUrl playable
   | { type: "song_final"; id: string; finalUrl: string } // clean CDN url
   | { type: "song_saved"; song: SavedSong } // downloaded into the local archive
@@ -99,6 +111,7 @@ export type ServerMsg =
   | { type: "now_playing"; id: string }
   | { type: "show_reset" } // stop stage audio and return to the lobby
   | { type: "show_ended"; songs: SavedSong[] } // set complete — recap playlist of saved songs
-  | { type: "force_next" } // tell the stage to crossfade the queued song in now
+  | { type: "force_next" } // tell the stage to transition to the queued song now
   | { type: "playback_control"; action: "play" | "pause" } // dashboard command for stage
-  | { type: "playback_state"; playing: boolean; canSkip: boolean; song?: Song }; // stage state for dashboard
+  | { type: "playback_state"; playing: boolean; canSkip: boolean; song?: Song; nextSong?: Song } // stage state for dashboard
+  | ({ type: "show_state" } & ShowState); // authoritative backend flow state

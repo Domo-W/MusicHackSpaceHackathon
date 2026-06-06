@@ -97,8 +97,40 @@ function PhoneShell() {
     });
     // a fresh show (reset) clears the recap so the walkthrough returns.
     const offReset = window.Net.on('show_reset', () => { setEnded(false); setRecapTracks([]); });
+    // Authoritative backend flow state — drives loading/reveal/walkthrough.
+    const offShow = window.Net.on('show_state', (m) => {
+      if (!m) return;
+      if (m.phase === 'idle') {
+        formedRound.current = 0;
+        setLoading(false);
+        setReveal(null);
+        setStep(0);
+        return;
+      }
+      if (m.phase === 'generating') {
+        setLoading(true);
+        setParticipated(true);
+        if (m.seed) setReveal(m.seed);
+        return;
+      }
+      if (m.phase === 'collecting') {
+        const changedRound = m.round !== formedRound.current;
+        formedRound.current = m.round;
+        // A new collecting round means a new set is live again — leave the recap.
+        setEnded(false);
+        if (loadingRef.current || changedRound) {
+          setLoading(false);
+          setReveal(null);
+          setStep(0);
+        }
+      }
+    });
     const offTug = window.Net.on('tug', (m) => {
-      if (m && m.phase === 'collecting' && m.round > formedRound.current) {
+      if (m && m.phase === 'idle') {
+        formedRound.current = 0;
+        setLoading(false);
+        setReveal(null);
+      } else if (m && m.phase === 'collecting' && m.round !== formedRound.current) {
         formedRound.current = m.round;
         // A new collecting round means a new set is live again — leave the recap.
         setEnded(false);
@@ -112,7 +144,7 @@ function PhoneShell() {
         }
       }
     });
-    return () => { offJoined(); offGen(); offRR(); offEnded(); offReset(); offTug(); };
+    return () => { offJoined(); offGen(); offRR(); offEnded(); offReset(); offShow(); offTug(); };
   }, []);
 
   const next = useCallback(() => setStep((s) => Math.min(s + 1, seq.length - 1)), [seq.length]);

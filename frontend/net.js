@@ -10,6 +10,8 @@
 
   const listeners = new Map(); // type -> Set<fn>
   const anyListeners = new Set();
+  const stickyTypes = new Set(["show_state", "playback_state", "tug", "names"]);
+  const lastMessages = new Map();
   let ws = null;
   let queue = [];
   let reconnectMs = 500;
@@ -37,6 +39,7 @@
     ws.onmessage = (e) => {
       let msg;
       try { msg = JSON.parse(e.data); } catch (err) { return; }
+      if (stickyTypes.has(msg.type)) lastMessages.set(msg.type, msg);
       emit(msg.type, msg);
       anyListeners.forEach((fn) => { try { fn(msg); } catch (err) {} });
     };
@@ -53,6 +56,14 @@
     on(type, fn) {
       if (!listeners.has(type)) listeners.set(type, new Set());
       listeners.get(type).add(fn);
+      if (lastMessages.has(type)) {
+        const msg = lastMessages.get(type);
+        queueMicrotask(() => {
+          if (listeners.get(type) && listeners.get(type).has(fn)) {
+            try { fn(msg); } catch (e) {}
+          }
+        });
+      }
       return () => listeners.get(type) && listeners.get(type).delete(fn);
     },
     onAny(fn) { anyListeners.add(fn); return () => anyListeners.delete(fn); },

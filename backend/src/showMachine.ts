@@ -6,7 +6,7 @@ import { songStore } from "./songStore.js";
 import { genreBpm } from "./tempo.js";
 import * as participants from "./participants.js";
 import * as tug from "./tug.js";
-import type { GenreInfo, Phase, SavedSong, Seed, Side, Song } from "./types.js";
+import type { GenreInfo, Phase, SavedSong, Seed, ShowState, Side, Song } from "./types.js";
 
 // The real Between Sets flow, built on the generate-one-ahead spine.
 //
@@ -18,8 +18,24 @@ import type { GenreInfo, Phase, SavedSong, Seed, Side, Song } from "./types.js";
 
 // ---------------- config / defaults ----------------
 let question = "What do you want to do tonight?";
-let genreA: GenreInfo = { key: "A", name: "NEW FUNK", short: "FNK", color: "#00E5FF" };
-let genreB: GenreInfo = { key: "B", name: "NEW SOUL", short: "SOL", color: "#FF1A8C" };
+const genre = (key: Side, name: string, short: string): GenreInfo => ({
+  key,
+  name,
+  short,
+  color: key === "A" ? "#00E5FF" : "#FF1A8C",
+});
+const AUTO_GENRE_PAIRS: Array<{ A: GenreInfo; B: GenreInfo }> = [
+  { A: genre("A", "Soca", "SOC"), B: genre("B", "Afrobeats", "AFR") },
+  { A: genre("A", "Dancehall", "DHL"), B: genre("B", "Pop", "POP") },
+  { A: genre("A", "Reggae", "REG"), B: genre("B", "Tropical House", "TRP") },
+  { A: genre("A", "Country", "CTY"), B: genre("B", "Pop Rock", "RCK") },
+  { A: genre("A", "Afrobeats", "AFR"), B: genre("B", "Dancehall", "DHL") },
+  { A: genre("A", "Pop", "POP"), B: genre("B", "Soca", "SOC") },
+  { A: genre("A", "Tropical House", "TRP"), B: genre("B", "Country", "CTY") },
+  { A: genre("A", "Pop Rock", "RCK"), B: genre("B", "Reggae", "REG") },
+];
+let genreA: GenreInfo = { ...AUTO_GENRE_PAIRS[0]!.A };
+let genreB: GenreInfo = { ...AUTO_GENRE_PAIRS[0]!.B };
 let collectSeconds = CONFIG.collectSeconds;
 
 // ---------------- runtime state ----------------
@@ -36,6 +52,11 @@ const cancelledGenerationJobs = new Set<number>();
 let songSequence = 0;
 let currentBpm = CONFIG.defaultBpm;
 let lastPlayingId = "";
+let activeSeed: Seed | undefined;
+let generationError: string | undefined;
+let genreSource: "auto" | "dj" = "auto";
+let autoGenrePairIndex = 0;
+let pendingGenreOverride: { A: GenreInfo; B: GenreInfo } | null = null;
 const songBpms = new Map<string, number>();
 
 let collectEndsAt = 0; // epoch ms when the current collecting window buzzes
@@ -58,6 +79,23 @@ setInterval(() => broadcast({ type: "names", names: participants.names() }), 400
 
 // ---------------- public message handlers ----------------
 
+export function currentShowState(): ShowState {
+  return {
+    started,
+    held,
+    phase,
+    round: roundIndex,
+    genres: { A: genreA, B: genreB },
+    genreSource,
+    seed: activeSeed,
+    error: generationError,
+  };
+}
+
+function broadcastShowState(): void {
+  broadcast({ type: "show_state", ...currentShowState() });
+}
+
 /** Reset everything to a blank lobby state (dashboard "Reset"). */
 export function reset(): void {
   started = false;
@@ -71,6 +109,13 @@ export function reset(): void {
   phase = "idle";
   currentBpm = CONFIG.defaultBpm;
   lastPlayingId = "";
+  activeSeed = undefined;
+  generationError = undefined;
+  genreSource = "auto";
+  autoGenrePairIndex = 0;
+  pendingGenreOverride = null;
+  genreA = { ...AUTO_GENRE_PAIRS[0]!.A };
+  genreB = { ...AUTO_GENRE_PAIRS[0]!.B };
   if (buzzerTimer) {
     clearTimeout(buzzerTimer);
     buzzerTimer = null;
@@ -80,6 +125,7 @@ export function reset(): void {
   console.log("[show] reset → blank lobby");
   broadcast({ type: "show_reset" });
   broadcast({ type: "names", names: [] }); // clear the stage name cloud
+  broadcastShowState();
   broadcastTug();
 }
 
@@ -129,6 +175,7 @@ export function onPlaying(id: string): void {
   currentBpm = songBpms.get(id) ?? currentBpm;
   broadcast({ type: "now_playing", id });
   console.log(`[show] now playing ${id}`);
+  broadcastShowState();
   if (held) {
     console.log("[show] held — not advancing to next round");
     return;
@@ -142,15 +189,20 @@ export function applyConfig(msg: {
   genreA?: GenreInfo;
   genreB?: GenreInfo;
   collectSeconds?: number;
+  genreOverride?: boolean;
 }): void {
   if (typeof msg.question === "string") question = msg.question;
-  if (msg.genreA) genreA = { ...msg.genreA, key: "A" };
-  if (msg.genreB) genreB = { ...msg.genreB, key: "B" };
+  if (msg.genreA || msg.genreB) {
+    pendingGenreOverride = {
+      A: msg.genreA ? { ...msg.genreA, key: "A" } : { ...genreA, key: "A" },
+      B: msg.genreB ? { ...msg.genreB, key: "B" } : { ...genreB, key: "B" },
+    };
+  }
   if (typeof msg.collectSeconds === "number" && msg.collectSeconds > 0) {
     collectSeconds = msg.collectSeconds;
   }
   console.log(
-    `[show] config: question="${question}" A=${genreA.name} B=${genreB.name} collect=${collectSeconds}s`,
+    `[show] config: question="${question}" override=${pendingGenreOverride ? `${pendingGenreOverride.A.name}/${pendingGenreOverride.B.name}` : "none"} collect=${collectSeconds}s`,
   );
 }
 
@@ -163,6 +215,7 @@ export function skip(): void {
   }
   activeGenerationJobId = null;
   generating = false; // release the gate so generateNext can fire again
+  generationError = undefined;
   // Re-resolve from whatever input we currently have for this round.
   resolveAndGenerate();
 }
@@ -171,6 +224,7 @@ export function skip(): void {
 export function hold(): void {
   held = true;
   console.log("[show] hold — advancing paused");
+  broadcastShowState();
 }
 
 /** resume: undo hold. If we're idling between rounds, advance now. */
@@ -178,6 +232,7 @@ export function resume(): void {
   if (!held) return;
   held = false;
   console.log("[show] resume — advancing re-enabled");
+  broadcastShowState();
   if (started && phase === "playing") beginCollecting();
 }
 
@@ -185,6 +240,7 @@ export function resume(): void {
 export function endVote(): void {
   if (phase !== "collecting") {
     console.log("[show] endVote ignored — not collecting");
+    broadcastShowState();
     return;
   }
   if (buzzerTimer) {
@@ -199,6 +255,18 @@ export function endVote(): void {
 
 function beginCollecting(): void {
   roundIndex += 1;
+  const automaticPair = AUTO_GENRE_PAIRS[autoGenrePairIndex % AUTO_GENRE_PAIRS.length]!;
+  autoGenrePairIndex += 1;
+  if (pendingGenreOverride) {
+    genreA = { ...pendingGenreOverride.A };
+    genreB = { ...pendingGenreOverride.B };
+    pendingGenreOverride = null;
+    genreSource = "dj";
+  } else {
+    genreA = { ...automaticPair.A };
+    genreB = { ...automaticPair.B };
+    genreSource = "auto";
+  }
   // Round boundary: reset the tug + everyone's answers for the new round.
   // EXCEPTION: round 1 is a cold start — pulls/answers that arrived BEFORE the
   // operator pressed Start must carry in, so do NOT reset on the first round.
@@ -207,6 +275,8 @@ function beginCollecting(): void {
     participants.clearRound();
   }
   phase = "collecting";
+  activeSeed = undefined;
+  generationError = undefined;
   collectEndsAt = Date.now() + collectSeconds * 1000;
 
   if (buzzerTimer) clearTimeout(buzzerTimer);
@@ -214,6 +284,7 @@ function beginCollecting(): void {
 
   startTugLoop();
   console.log(`[show] collecting round ${roundIndex} for ${collectSeconds}s`);
+  broadcastShowState();
 }
 
 function startTugLoop(): void {
@@ -264,6 +335,8 @@ function resolveAndGenerate(): void {
   console.log(`[show] round ${roundIndex} → ${winnerSide} (${genre}) — selected ${name}`);
 
   const seed: Seed = { name, answer, genre };
+  activeSeed = seed;
+  generationError = undefined;
   void generateNext(seed);
 }
 
@@ -279,6 +352,8 @@ async function generateNext(seed: Seed): Promise<void> {
   }
   generating = true;
   phase = "generating";
+  activeSeed = seed;
+  generationError = undefined;
   const epoch = generationEpoch;
   const jobId = ++generationJobSequence;
   const id = `song-${Date.now()}-${++songSequence}`;
@@ -286,6 +361,8 @@ async function generateNext(seed: Seed): Promise<void> {
   latestGeneration = { jobId, songId: id };
   const bpm = genreBpm(seed.genre);
   songBpms.set(id, bpm);
+  broadcastShowState();
+  let playableSent = false;
 
   const isCurrentJob = () =>
     epoch === generationEpoch && !cancelledGenerationJobs.has(jobId);
@@ -297,7 +374,15 @@ async function generateNext(seed: Seed): Promise<void> {
       // The current song is now playable/queued; treat the stage as "playing"
       // for our phase-tracking until the stage confirms via onPlaying.
       phase = "playing";
+      if (playableSent) activeSeed = undefined;
+      broadcastShowState();
     }
+  };
+
+  const failGeneration = (err: unknown) => {
+    if (!isCurrentJob() || playableSent) return;
+    generationError = (err as Error).message || "Song generation failed.";
+    broadcast({ type: "generation_failed", id, message: generationError });
   };
 
   try {
@@ -320,6 +405,7 @@ async function generateNext(seed: Seed): Promise<void> {
     generateSong(prompt, {
       onPlayable: (url) => {
         if (!isCurrentJob()) return;
+        playableSent = true;
         song.streamUrl = url;
         console.log(`[show] ${id}: playable (streaming) → sending to stage; gate released`);
         broadcast({ type: "song_ready", song: { ...song } });
@@ -342,11 +428,13 @@ async function generateNext(seed: Seed): Promise<void> {
       .catch((err) => {
         if (isCurrentJob()) {
           console.error(`[show] ${id}: generation failed —`, (err as Error).message);
+          failGeneration(err);
         }
       })
       .finally(releaseGate); // safety: release if it errored before playable
   } catch (err) {
     console.error(`[show] ${id}: prompt failed —`, (err as Error).message);
+    failGeneration(err);
     releaseGate();
   }
 }
