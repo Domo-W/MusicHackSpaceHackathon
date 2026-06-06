@@ -15,8 +15,8 @@
   'use strict';
 
   const GENRES = {
-    A: { key: 'A', name: 'NEW FUNK', short: 'FNK', color: '#00E5FF' },
-    B: { key: 'B', name: 'NEW JAZZ', short: 'JAZ', color: '#FF1A8C' },
+    A: { key: 'A', name: 'NU FUNK', short: 'FNK', color: '#00E5FF' },
+    B: { key: 'B', name: 'NU SOUL', short: 'SOL', color: '#FF1A8C' },
   };
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 

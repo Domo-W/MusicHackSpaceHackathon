@@ -13,6 +13,7 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
 
 const MODES = [
   { id: 'vibe', label: 'VIBE', Comp: window.ScreenVibe },
+  { id: 'intent', label: 'INTENT', Comp: window.ScreenIntent },
   { id: 'texture', label: 'NAME', Comp: window.ScreenTexture },
   { id: 'tug', label: 'TUG', Comp: window.ScreenTug },
 ];
@@ -71,7 +72,7 @@ function App() {
 
   // ---- swipe handlers (guarded so the hero hold + text input keep working) ----
   const onDown = (e) => {
-    if (e.target.closest('.hype, .word-input, .pull-btn')) return;
+    if (e.target.closest('.hype, .word-input, .pull-btn, .intent-input')) return;
     drag.current = { active: true, decided: false, x0: e.clientX, y0: e.clientY, w: trackRef.current.offsetWidth };
   };
   const onMove = (e) => {
@@ -123,6 +124,7 @@ function App() {
               <span className="room-stat"><b>{crowd.crowdSize}</b>&nbsp;HERE · <b>{crowd.bpm}</b>&nbsp;BPM</span>
             </div>
 
+            {/* mode banner reflects the current screen */}
             <div className="dj-banner">
               <span className="pip" />DJ ENABLED&nbsp;<b>{MODES[idx].label}</b>
             </div>
@@ -139,7 +141,7 @@ function App() {
               <div className={'deck-track' + (dragging ? ' dragging' : '')} style={trackStyle}>
                 {MODES.map((m, i) => (
                   <div className="deck-pane" key={m.id}>
-                    {Math.abs(i - idx) <= 1 ? <m.Comp active={i === idx} /> : null}
+                    {Math.abs(i - idx) <= 1 ? <m.Comp active={i === idx} onAdvance={() => goTo(i + 1)} /> : null}
                   </div>
                 ))}
               </div>

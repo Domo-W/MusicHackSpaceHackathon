@@ -402,3 +402,100 @@
 .tw-sub { font-family: var(--mono); font-size: 14px; font-weight: 700; letter-spacing: 0.2em; color: #050507; }
 @keyframes tugwin { 0% { opacity: 0; } 8% { opacity: 1; } 85% { opacity: 1; } 100% { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .sudden, .tug-win, .tug.danger .tug-edge { animation: none !important; } }
+
+/* ---------- ONBOARDING shell ---------- */
+.ob-progress {
+  position: relative; z-index: 6; margin: 0 18px 6px;
+  display: flex; align-items: center; gap: 9px; white-space: nowrap;
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--text-dim);
+}
+.ob-progress .pip { width: 6px; height: 6px; border-radius: 50%; background: var(--ecolor); box-shadow: 0 0 8px var(--ecolor); }
+.ob-progress b { color: var(--text); font-weight: 700; }
+.ob-body { position: relative; z-index: 5; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.ob-foot {
+  position: relative; z-index: 7; padding: 8px 18px calc(20px + env(safe-area-inset-bottom));
+}
+.ob-continue {
+  width: 100%; min-height: 60px; border-radius: 16px;
+  font-family: var(--disp); font-weight: 700; font-size: 18px; letter-spacing: 0.06em; color: #050507;
+  background: var(--ecolor); text-transform: uppercase;
+  box-shadow: 0 0 calc(26px * var(--glow)) color-mix(in srgb, var(--ecolor) 55%, transparent);
+  transition: transform .14s ease;
+}
+.ob-continue:active { transform: scale(0.97); }
+
+/* ---------- INTENT screen ---------- */
+.screen.intent { padding: 6px 18px 0; }
+.intent-head { position: relative; z-index: 3; }
+.intent-title {
+  font-family: var(--disp); font-weight: 700; font-size: 56px; line-height: 0.92;
+  letter-spacing: -0.02em; text-transform: uppercase; margin: 6px 0 0; color: #fff;
+  text-shadow: 0 0 calc(26px * var(--glow)) color-mix(in srgb, var(--cyan) 65%, transparent);
+}
+.intent-title .it-dots { color: var(--cyan); animation: itdots 1.3s steps(1) infinite; }
+@keyframes itdots { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+.intent-box-wrap { position: relative; z-index: 3; margin-top: 24px; }
+.intent-input {
+  width: 100%; min-height: 172px; resize: none; display: block;
+  background: var(--surface-2); border: 1.6px solid var(--line); border-radius: 20px;
+  color: #fff; font-family: var(--disp); font-weight: 600; font-size: 25px; line-height: 1.32;
+  padding: 22px 20px 34px; text-align: center; outline: none;
+  transition: border-color .18s ease, box-shadow .18s ease;
+}
+.intent-input::placeholder { color: var(--text-dim); font-weight: 500; }
+.intent-input:focus { border-color: color-mix(in srgb, var(--cyan) 70%, var(--line)); box-shadow: 0 0 calc(20px * var(--glow)) color-mix(in srgb, var(--cyan) 35%, transparent); }
+.intent-input.has:focus { border-color: var(--cyan); box-shadow: 0 0 calc(28px * var(--glow)) color-mix(in srgb, var(--cyan) 50%, transparent); animation: intentglow 1.8s ease-in-out infinite; }
+.intent-input.over, .intent-input.over:focus { border-color: #FF4D4D; box-shadow: 0 0 calc(24px * var(--glow)) rgba(255,77,77,0.4); animation: none; }
+@keyframes intentglow {
+  0%,100% { box-shadow: 0 0 calc(22px * var(--glow)) color-mix(in srgb, var(--cyan) 42%, transparent); }
+  50% { box-shadow: 0 0 calc(34px * var(--glow)) color-mix(in srgb, var(--cyan) 62%, transparent); }
+}
+.intent-counter {
+  position: absolute; right: 16px; bottom: 12px;
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; color: var(--text-dim);
+}
+.intent-counter.over { color: #FF4D4D; font-weight: 700; }
+.intent-canvas { position: absolute; inset: 0; z-index: 4; pointer-events: none; }
+
+.intent-dissolve {
+  width: 100%; min-height: 172px; border-radius: 20px;
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: center;
+  padding: 22px 20px; gap: 0;
+  font-family: var(--disp); font-weight: 600; font-size: 25px; line-height: 1.32;
+  border: 1.6px solid transparent;
+}
+.intent-dissolve span {
+  display: inline-block; color: #fff; white-space: pre;
+  animation: intentFloat 1.1s cubic-bezier(.3,.2,.2,1) forwards;
+  text-shadow: 0 0 16px var(--cyan);
+}
+@keyframes intentFloat {
+  0% { transform: translateY(0) scale(1); opacity: 1; filter: blur(0); }
+  100% { transform: translateY(-90px) scale(1.15); opacity: 0; filter: blur(7px); }
+}
+
+.intent-foot {
+  position: relative; z-index: 5; display: flex; align-items: center; gap: 14px;
+  padding: 8px 0 16px;
+}
+.intent-skip {
+  font-family: var(--mono); font-size: 11px; font-weight: 700; letter-spacing: 0.16em;
+  color: var(--text-dim); text-transform: uppercase; padding: 18px 10px;
+}
+.intent-skip:active { color: var(--text); }
+.intent-send {
+  flex: 1; min-height: 64px; border-radius: 16px;
+  display: flex; align-items: center; justify-content: center; gap: 12px;
+  font-family: var(--disp); font-weight: 700; font-size: 20px; letter-spacing: 0.08em;
+  background: var(--cyan); color: #050507; text-transform: uppercase;
+  box-shadow: 0 0 calc(26px * var(--glow)) color-mix(in srgb, var(--cyan) 55%, transparent);
+  transition: transform .14s ease, opacity .14s ease, box-shadow .14s ease;
+}
+.intent-send:active { transform: scale(0.97); }
+.intent-send:disabled { opacity: 0.35; box-shadow: none; background: var(--surface-2); color: var(--text-dim); }
+@media (prefers-reduced-motion: reduce) {
+  .intent-title .it-dots, .intent-input.has:focus { animation: none !important; }
+  .intent-dissolve span { animation: intentFloat .2s linear forwards; }
+}
