@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0A0A0F" />
+  <title>THE SHOW — Stage · Genre Tug-of-War</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="stage.css" />
+</head>
+<body>
+  <div id="viewport">
+    <div id="stageRoot">
+      <canvas id="bf"></canvas>
+
+      <div class="overlay">
+        <header class="st-head">
+          <span class="st-live"><i class="st-dot"></i>LIVE — THE SHOW</span>
+          <span class="st-mode">GENRE TUG-OF-WAR</span>
+        </header>
+
+        <div class="readout">
+          <div class="ro-side techno">
+            <span class="ro-name" id="tecName">TECHNO</span>
+            <span class="ro-pct" id="tecPct">50</span>
+          </div>
+          <span class="ro-dash">—</span>
+          <div class="ro-side disco">
+            <span class="ro-pct" id="dscPct">50</span>
+            <span class="ro-name" id="dscName">DISCO</span>
+          </div>
+        </div>
+
+        <div class="round">
+          <span id="roundTxt">ROUND 1 · BEST OF 3</span>
+          <span class="score" id="score"></span>
+        </div>
+
+        <div class="hype">
+          <span class="hype-lbl">CROWD HYPE</span>
+          <div class="hype-bar"><i id="hypeFill"></i></div>
+        </div>
+
+        <div class="sudden-stage" id="sudden" data-on="0"></div>
+      </div>
+
+      <div class="win-flash" id="winFlash" data-on="0">
+        <span class="wf-name" id="wfName"></span>
+        <span class="wf-sub" id="wfSub"></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="hint" id="hint">Open the phone app's <b>TUG</b> tab on another device/tab to pull · this view is the stage authority</div>
+
+  <template id="__bundler_thumbnail">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+      <rect width="50" height="100" fill="#00E5FF"/>
+      <rect x="50" width="50" height="100" fill="#FF1A8C"/>
+      <rect x="46" width="8" height="100" fill="#ffffff"/>
+    </svg>
+  </template>
+
+  <script src="tug-sim.js?v=7"></script>
+  <script src="stage.js?v=7"></script>
+</body>
+</html>

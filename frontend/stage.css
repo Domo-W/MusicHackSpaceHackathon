@@ -1,0 +1,101 @@
+/* ============================================================
+   stage.css — 16:9 projector battlefront for Genre Tug-of-War
+   ============================================================ */
+:root {
+  --cyan: #00E5FF;
+  --magenta: #FF1A8C;
+  --disp: 'Space Grotesk', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; background: #000; overflow: hidden; font-family: var(--disp); color: #fff; -webkit-font-smoothing: antialiased; }
+
+#viewport { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+#stageRoot {
+  position: relative; width: 1920px; height: 1080px; flex: none;
+  transform-origin: center center; background: #050507; overflow: hidden;
+}
+#bf { position: absolute; inset: 0; width: 1920px; height: 1080px; }
+
+.overlay { position: absolute; inset: 0; pointer-events: none; }
+
+/* header */
+.st-head {
+  position: absolute; top: 40px; left: 48px; right: 48px;
+  display: flex; align-items: center; justify-content: space-between;
+  font-family: var(--mono); letter-spacing: 0.22em; text-transform: uppercase;
+}
+.st-live { display: inline-flex; align-items: center; gap: 14px; font-size: 22px; font-weight: 700; white-space: nowrap; }
+.st-dot { width: 16px; height: 16px; border-radius: 50%; background: #FF2D2D; box-shadow: 0 0 18px #FF2D2D; animation: blink 1.2s infinite; }
+@keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+.st-mode { font-size: 22px; font-weight: 700; color: rgba(255,255,255,0.7); white-space: nowrap; }
+
+/* center readout */
+.readout {
+  position: absolute; top: 130px; left: 0; right: 0;
+  display: flex; align-items: center; justify-content: center; gap: 60px;
+}
+.ro-side { display: flex; align-items: baseline; gap: 34px; }
+.ro-side.techno { color: var(--cyan); }
+.ro-side.disco { color: var(--magenta); }
+.ro-name { font-family: var(--disp); font-weight: 700; font-size: 76px; letter-spacing: -0.01em; text-transform: uppercase; white-space: nowrap; }
+.ro-pct { font-family: var(--disp); font-weight: 700; font-size: 124px; line-height: 0.85; letter-spacing: -0.03em; }
+.ro-pct::after { content: '%'; font-size: 46px; opacity: 0.6; }
+.ro-dash { font-size: 90px; font-weight: 700; color: rgba(255,255,255,0.35); }
+.techno .ro-name, .techno .ro-pct { text-shadow: 0 0 50px color-mix(in srgb, var(--cyan) 70%, transparent); }
+.disco .ro-name, .disco .ro-pct { text-shadow: 0 0 50px color-mix(in srgb, var(--magenta) 70%, transparent); }
+
+/* round + score */
+.round {
+  position: absolute; top: 360px; left: 0; right: 0; text-align: center;
+  font-family: var(--mono); font-size: 26px; font-weight: 700; letter-spacing: 0.24em;
+  color: rgba(255,255,255,0.75); text-transform: uppercase;
+  display: flex; flex-direction: column; align-items: center; gap: 14px;
+}
+#roundTxt { white-space: nowrap; }
+.score { display: inline-flex; gap: 12px; }
+.score i { width: 18px; height: 18px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.4); display: block; }
+.score i.a { background: var(--cyan); border-color: var(--cyan); box-shadow: 0 0 16px var(--cyan); }
+.score i.b { background: var(--magenta); border-color: var(--magenta); box-shadow: 0 0 16px var(--magenta); }
+
+/* hype meter */
+.hype {
+  position: absolute; bottom: 56px; left: 50%; transform: translateX(-50%); width: 640px;
+  display: flex; flex-direction: column; align-items: center; gap: 14px;
+}
+.hype-lbl { font-family: var(--mono); font-size: 20px; font-weight: 700; letter-spacing: 0.3em; color: rgba(255,255,255,0.6); }
+.hype-bar { width: 100%; height: 18px; border-radius: 999px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); overflow: hidden; }
+.hype-bar i { display: block; height: 100%; width: 10%; border-radius: 999px; background: linear-gradient(90deg, var(--cyan), #fff, var(--magenta)); box-shadow: 0 0 22px rgba(255,255,255,0.6); transition: width .12s linear; }
+
+/* sudden death indicator */
+.sudden-stage {
+  position: absolute; top: 470px; left: 50%; transform: translateX(-50%);
+  font-family: var(--disp); font-weight: 700; font-size: 56px; letter-spacing: 0.04em;
+  text-transform: uppercase; text-align: center; opacity: 0; transition: opacity .2s;
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+}
+.sudden-stage[data-on="1"] { opacity: 1; animation: sdpulse .5s ease-in-out infinite; }
+.sudden-stage .sd-count { font-size: 120px; line-height: 0.9; }
+@keyframes sdpulse { 0%,100% { transform: translateX(-50%) scale(1); } 50% { transform: translateX(-50%) scale(1.06); } }
+
+/* win flash */
+.win-flash {
+  position: absolute; inset: 0; z-index: 40; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 20px; opacity: 0; pointer-events: none;
+}
+.win-flash[data-on="1"] { animation: wflash 2.9s ease-out forwards; }
+.wf-name { font-family: var(--disp); font-weight: 700; font-size: 200px; line-height: 0.85; color: #050507; text-transform: uppercase; letter-spacing: -0.03em; white-space: nowrap; }
+.wf-sub { font-family: var(--mono); font-size: 40px; font-weight: 700; letter-spacing: 0.3em; color: #050507; }
+@keyframes wflash { 0% { opacity: 0; } 8% { opacity: 1; } 86% { opacity: 1; } 100% { opacity: 0; } }
+
+.hint {
+  position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+  font-family: var(--mono); font-size: 12px; letter-spacing: 0.1em; color: rgba(255,255,255,0.4);
+  text-align: center; padding: 0 16px;
+}
+.hint b { color: rgba(255,255,255,0.7); }
+
+@media (prefers-reduced-motion: reduce) {
+  .st-dot, .sudden-stage, .win-flash { animation: none !important; }
+  .win-flash[data-on="1"] { opacity: 0.92; }
+}
