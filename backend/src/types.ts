@@ -62,7 +62,9 @@ export type ClientMsg =
   | { type: "resume" } // undo hold
   | { type: "reset" } // blank slate — back to the lobby
   | { type: "endVote" } // force the collecting round to resolve now (testing)
-  | { type: "forceNext" }; // force the stage to crossfade the next song in now (testing)
+  | { type: "forceNext" } // force the stage to crossfade the next song in now
+  | { type: "playbackControl"; action: "play" | "pause" } // dashboard → stage
+  | { type: "playbackState"; playing: boolean; canSkip: boolean; song?: Song }; // stage → server
 
 // ---------------- server → clients ----------------
 export type ServerMsg =
@@ -95,4 +97,6 @@ export type ServerMsg =
   | { type: "song_cancelled"; id: string } // remove a skipped queued song
   | { type: "now_playing"; id: string }
   | { type: "show_reset" } // stop stage audio and return to the lobby
-  | { type: "force_next" }; // tell the stage to crossfade the queued song in now
+  | { type: "force_next" } // tell the stage to crossfade the queued song in now
+  | { type: "playback_control"; action: "play" | "pause" } // dashboard command for stage
+  | { type: "playback_state"; playing: boolean; canSkip: boolean; song?: Song }; // stage state for dashboard

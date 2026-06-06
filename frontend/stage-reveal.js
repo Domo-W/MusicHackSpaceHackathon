@@ -20,6 +20,14 @@
     fadeSec: 6,
     minPlaySec: 22, // each song plays >= this, then crossfades as soon as the next is ready
     onPlaying: function (id) { Net.send({ type: "playing", id: id }); },
+    onState: function (state) {
+      Net.send({
+        type: "playbackState",
+        playing: !!state.playing,
+        canSkip: !!state.canSkip,
+        song: state.song || undefined,
+      });
+    },
   });
 
   Net.on("song_ready", function (m) { AudioEngine.ready(m.song); });
@@ -27,6 +35,10 @@
   Net.on("song_cancelled", function (m) { if (AudioEngine.cancel) AudioEngine.cancel(m.id); });
   Net.on("show_reset", function () { if (AudioEngine.reset) AudioEngine.reset(); });
   Net.on("force_next", function () { if (AudioEngine.forceNext) AudioEngine.forceNext(); });
+  Net.on("playback_control", function (m) {
+    if (m.action === "pause" && AudioEngine.pause) AudioEngine.pause();
+    if (m.action === "play" && AudioEngine.play) AudioEngine.play();
+  });
 
   // ---- DOM handles (created lazily so order-of-load is irrelevant) ----
   var ticker = document.getElementById("revealTicker");
