@@ -118,8 +118,67 @@
   // ---- LOBBY vs BATTLE: the show is started from the DASHBOARD now. Before the
   // DJ starts (phase "idle"), the stage shows the "scan to join" lobby; once a
   // round is collecting it shows the tug battle. Driven by the raw 'tug' phase. ----
+  // ---- SET COMPLETE finale (merged from design-handoff) ----
+  // The DJ ends the show -> show_ended carries the saved-song playlist. We flip
+  // body.ended so the #ended overlay cross-fades over the battlefront. A new
+  // collecting round (or a reset) leaves the finale.
+  var ended = false;
+  var lastCrowd = 0;
+  var endTracksEl = document.getElementById("endTracks");
+  var endCrowdEl = document.getElementById("endCrowd");
+  var creditsTrack = document.getElementById("creditsTrack");
+
+  // Build the scrolling credits with createElement + textContent (audience names
+  // are user input — never innerHTML). Doubled so the -50% loop is seamless.
+  function buildCredits(tracks) {
+    if (!creditsTrack) return;
+    creditsTrack.textContent = "";
+    if (!tracks.length) return;
+    function run() {
+      tracks.forEach(function (t, i) {
+        var span = document.createElement("span");
+        span.className = "cr";
+        var b = document.createElement("b");
+        b.textContent = String(i + 1).padStart(2, "0") + " " + (t.title || "");
+        span.appendChild(b);
+        span.appendChild(document.createTextNode(" · " + (t.genre || "") + " · "));
+        var by = document.createElement("i");
+        by.textContent = "by " + (t.name || "");
+        span.appendChild(by);
+        creditsTrack.appendChild(span);
+      });
+    }
+    run();
+    run();
+  }
+
+  Net.on("show_ended", function (m) {
+    ended = true;
+    var tracks = (m && Array.isArray(m.songs)) ? m.songs : [];
+    if (endTracksEl) endTracksEl.textContent = tracks.length;
+    if (endCrowdEl) endCrowdEl.textContent = lastCrowd;
+    buildCredits(tracks);
+    document.body.classList.remove("lobby");
+    document.body.classList.add("ended");
+  });
+  Net.on("show_reset", function () {
+    ended = false;
+    document.body.classList.remove("ended");
+  });
+
   Net.on("tug", function (m) {
     if (!m) return;
+    if (typeof m.crowdSize === "number") lastCrowd = m.crowdSize;
+    // While the finale is up, ignore lobby/battle toggles — only a live round
+    // (collecting) tears it down.
+    if (ended) {
+      if (m.phase === "collecting") {
+        ended = false;
+        document.body.classList.remove("ended");
+      } else {
+        return;
+      }
+    }
     var isLobby = m.phase === "idle";
     document.body.classList.toggle("lobby", isLobby);
     if (lobbyCount && typeof m.crowdSize === "number") lobbyCount.textContent = m.crowdSize;

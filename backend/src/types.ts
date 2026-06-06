@@ -61,6 +61,7 @@ export type ClientMsg =
   | { type: "hold" } // keep current playing, pause advancing
   | { type: "resume" } // undo hold
   | { type: "reset" } // blank slate — back to the lobby
+  | { type: "end" } // end the show — phones show the recap, stage shows the finale
   | { type: "endVote" } // force the collecting round to resolve now (testing)
   | { type: "forceNext" }; // force the stage to crossfade the next song in now (testing)
 
@@ -95,4 +96,5 @@ export type ServerMsg =
   | { type: "song_cancelled"; id: string } // remove a skipped queued song
   | { type: "now_playing"; id: string }
   | { type: "show_reset" } // stop stage audio and return to the lobby
+  | { type: "show_ended"; songs: SavedSong[] } // set complete — recap playlist of saved songs
   | { type: "force_next" }; // tell the stage to crossfade the queued song in now

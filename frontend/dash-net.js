@@ -139,6 +139,7 @@
     bar.appendChild(makeBtn("Hold", "#B65CFF", function () { Net.send({ type: "hold" }); status("hold sent"); }));
     bar.appendChild(makeBtn("Resume", "#FF1A8C", function () { Net.send({ type: "resume" }); status("resume sent"); }));
     bar.appendChild(makeBtn("Reset", "#8a8a99", function () { Net.send({ type: "reset" }); status("reset → blank lobby"); }));
+    bar.appendChild(makeBtn("End Show", "#FF3B30", function () { Net.send({ type: "end" }); status("end show → recap"); }));
     bar.appendChild(makeBtn("End Vote", "#2DD36F", function () { Net.send({ type: "endVote" }); status("end vote → resolving round"); }));
     bar.appendChild(makeBtn("Next Song", "#FFD23F", function () { Net.send({ type: "forceNext" }); status("force next song"); }));
     downloadBtn = makeBtn("Download Latest", "#F4F4F8", function () {

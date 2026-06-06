@@ -101,13 +101,7 @@ html, body { height: 100%; background: #000; overflow: hidden; font-family: var(
 }
 
 /* ============================================================
-   MERGED FROM design-handoff — PARTY-ENDED finale (cross-fades
-   over the battlefront when the DJ ends the show).
-   NOTE: the handoff's INTRO/lobby rules are intentionally omitted
-   here — this app already has its own scan-to-join lobby, and the
-   handoff's bare `.lobby { display:flex … }` would collide with
-   the live `<body class="lobby">`. Only the `.ended` finale +
-   credits + QR styles are merged.
+   INTRO + PARTY-ENDED states (cross-fade over the battlefront)
    ============================================================ */
 .screen-state {
   position: absolute; inset: 0; z-index: 20;
@@ -117,11 +111,13 @@ html, body { height: 100%; background: #000; overflow: hidden; font-family: var(
 #ended { z-index: 30; }
 .overlay, #bf { transition: opacity .6s ease; }
 
+body.intro #intro { opacity: 1; }
 body.ended #ended { opacity: 1; }
-body.ended .overlay, body.ended #bf { opacity: 0; }
-body.ended .hint { display: none; }
+body.intro .overlay, body.ended .overlay,
+body.intro #bf, body.ended #bf { opacity: 0; }
+body.intro .hint, body.ended .hint { display: none; }
 
-/* calm bloom backdrop for the finale */
+/* calm bloom backdrop for the state screens */
 .screen-state::before {
   content: ''; position: absolute; inset: 0; z-index: -1;
   background:
@@ -140,10 +136,47 @@ body.ended .hint { display: none; }
   color: rgba(255,255,255,0.55); text-transform: uppercase;
 }
 
+/* ---- INTRO lobby ---- */
+.lobby {
+  flex: 1; display: flex; align-items: center; justify-content: center; gap: 130px;
+  padding: 0 120px;
+}
+.lobby-main { display: flex; flex-direction: column; align-items: flex-start; }
+.disc-glyph {
+  width: 118px; height: 118px; margin-bottom: 30px;
+  filter: drop-shadow(0 0 26px rgba(0,229,255,0.5)) drop-shadow(0 0 26px rgba(255,26,140,0.4));
+  animation: discspin 14s linear infinite;
+}
+@keyframes discspin { to { transform: rotate(360deg); } }
+.lobby-title {
+  font-family: var(--disp); font-weight: 700; font-size: 140px; line-height: 0.84;
+  letter-spacing: -0.03em; text-transform: uppercase; margin: 0;
+  width: max-content; padding-right: 0.12em;
+  background: linear-gradient(100deg, var(--cyan) 8%, #fff 50%, var(--magenta) 92%);
+  background-size: 220% 100%;
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: lobbypan 9s ease-in-out infinite alternate;
+}
 @keyframes lobbypan { from { background-position: 0% 0; } to { background-position: 100% 0; } }
+.lobby-sub {
+  font-family: var(--mono); font-size: 26px; font-weight: 500; letter-spacing: 0.3em;
+  text-transform: uppercase; color: rgba(255,255,255,0.6); margin-top: 36px;
+}
 
-/* QR (reuses the lobby QR box from stage-live.html; `.small` sizes the finale) */
-.lobby-qr.small { width: 360px; height: 360px; padding: 24px; box-sizing: border-box; }
+.lobby-join { display: flex; flex-direction: column; align-items: center; gap: 24px; }
+.lobby-qr {
+  width: 440px; height: 440px; border-radius: 28px; padding: 30px;
+  background: #fff; display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 0 70px rgba(0,229,255,0.4), 0 0 90px rgba(255,26,140,0.3);
+  animation: qrbreath 3.6s ease-in-out infinite;
+}
+.lobby-qr.small { width: 360px; height: 360px; padding: 24px; }
+.lobby-qr canvas { width: 100%; height: 100%; image-rendering: pixelated; border-radius: 6px; }
+@keyframes qrbreath {
+  0%,100% { box-shadow: 0 0 60px rgba(0,229,255,0.34), 0 0 80px rgba(255,26,140,0.26); transform: scale(1); }
+  50% { box-shadow: 0 0 90px rgba(0,229,255,0.5), 0 0 110px rgba(255,26,140,0.4); transform: scale(1.025); }
+}
 .qr-kicker { font-family: var(--disp); font-weight: 700; font-size: 32px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--cyan); text-shadow: 0 0 30px rgba(0,229,255,0.6); white-space: nowrap; }
 .qr-kicker.save { font-size: 28px; }
 .qr-url { font-family: var(--mono); font-size: 22px; font-weight: 700; letter-spacing: 0.18em; color: rgba(255,255,255,0.75); white-space: nowrap; }
@@ -191,6 +224,32 @@ body.ended .hint { display: none; }
 .credits-track .cr i { font-style: normal; }
 @keyframes creditscroll { to { transform: translateX(-50%); } }
 
-/* entrance pop on the finale */
+/* entrance pop on the active state */
+body.intro #intro .lobby-main, body.intro #intro .lobby-join,
 body.ended #ended .ended-main { animation: stateRise .7s cubic-bezier(.2,.8,.2,1) both; }
+body.intro #intro .lobby-join { animation-delay: .08s; }
 @keyframes stateRise { from { opacity: 0; transform: translateY(26px); } to { opacity: 1; transform: none; } }
+
+/* dev phase stepper (demo aid, not product UI) */
+.dev-step {
+  position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 9999;
+  display: flex; align-items: center; gap: 6px; padding: 6px 8px;
+  background: rgba(10,10,15,0.86); border: 1px solid rgba(255,255,255,0.16);
+  border-radius: 999px; backdrop-filter: blur(8px); font-family: var(--mono);
+}
+.dev-step .dev-lbl { font-size: 9px; font-weight: 700; letter-spacing: 0.18em; color: rgba(255,255,255,0.4); padding: 0 4px; }
+.dev-step button {
+  font-family: inherit; font-size: 10px; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase; color: rgba(255,255,255,0.7);
+  background: transparent; border: none; border-radius: 999px;
+  padding: 7px 13px; cursor: pointer; transition: all .14s ease;
+}
+.dev-step button:hover { color: #fff; }
+.dev-step button.on { color: #050507; background: var(--cyan); box-shadow: 0 0 12px rgba(0,229,255,0.6); }
+
+@media (prefers-reduced-motion: reduce) {
+  .disc-glyph, .lobby-title, .ended-title, .lobby-qr, .credits-track,
+  body.intro #intro .lobby-main, body.intro #intro .lobby-join, body.ended #ended .ended-main {
+    animation: none !important;
+  }
+}

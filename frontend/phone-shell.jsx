@@ -18,6 +18,22 @@ const { useState, useEffect, useRef, useCallback, useLayoutEffect } = React;
 const SEQ_NEW = ['name', 'vibe', 'intent', 'vote'];
 const SEQ_RETURNING = ['vibe', 'vote'];
 
+/* Map the backend `show_ended` payload (SavedSong[]) to the recap track shape
+   ScreenRecap expects: {id,title,genre,by,dur,fileName,downloadUrl}. SavedSong
+   carries no duration, so we use a sensible placeholder for the player ticker. */
+function mapSavedSongs(songs) {
+  if (!Array.isArray(songs)) return [];
+  return songs.map((s) => ({
+    id: s.id,
+    title: (s.title || 'UNTITLED').toUpperCase(),
+    genre: (s.genre || '').toUpperCase(),
+    by: s.name || '—',
+    dur: 200,
+    fileName: s.fileName,
+    downloadUrl: s.downloadUrl,
+  }));
+}
+
 function PhoneShell() {
   const crowd = useCrowdState();
   const [joined, setJoined] = useState(!!window.__participantId);
@@ -26,6 +42,8 @@ function PhoneShell() {
   const [loading, setLoading] = useState(false);
   const [reveal, setReveal] = useState(null); // {name, genre, answer} from round_result
   const [scale, setScale] = useState(1);
+  const [ended, setEnded] = useState(false);   // show over -> ScreenRecap (merged from design-handoff)
+  const [recapTracks, setRecapTracks] = useState([]);
 
   const seq = participated ? SEQ_RETURNING : SEQ_NEW;
   const screen = seq[Math.min(step, seq.length - 1)];
@@ -70,9 +88,20 @@ function PhoneShell() {
     const toLoading = () => { setLoading(true); setParticipated(true); };
     const offGen = window.Net.on('generating', toLoading);
     const offRR = window.Net.on('round_result', (m) => setReveal(m));
+    // SET COMPLETE: the DJ ended the show. Flip to the recap playlist built from
+    // the real saved songs in the broadcast payload (falls back to setlist.js).
+    const offEnded = window.Net.on('show_ended', (m) => {
+      setRecapTracks(mapSavedSongs(m && m.songs));
+      setEnded(true);
+      setLoading(false);
+    });
+    // a fresh show (reset) clears the recap so the walkthrough returns.
+    const offReset = window.Net.on('show_reset', () => { setEnded(false); setRecapTracks([]); });
     const offTug = window.Net.on('tug', (m) => {
       if (m && m.phase === 'collecting' && m.round > formedRound.current) {
         formedRound.current = m.round;
+        // A new collecting round means a new set is live again — leave the recap.
+        setEnded(false);
         // Only RESET the walkthrough for a brand-new song round (i.e. we were
         // waiting on the loading screen). A pre-start cold-start round must NOT
         // wipe progress the user already made.
@@ -83,7 +112,7 @@ function PhoneShell() {
         }
       }
     });
-    return () => { offJoined(); offGen(); offRR(); offTug(); };
+    return () => { offJoined(); offGen(); offRR(); offEnded(); offReset(); offTug(); };
   }, []);
 
   const next = useCallback(() => setStep((s) => Math.min(s + 1, seq.length - 1)), [seq.length]);
@@ -114,6 +143,10 @@ function PhoneShell() {
           <div className="phone">
             <Background />
 
+            {ended ? (
+              <ScreenRecap tracks={recapTracks} onBack={() => setEnded(false)} />
+            ) : (
+            <React.Fragment>
             <div className="topbar">
               <span className="live-pill"><i className="live-dot" />LIVE<span className="sep">—</span><span className="show">THE SHOW</span></span>
               <span className="room-stat"><b>{crowd.crowdSize}</b>&nbsp;HERE · <b>{crowd.bpm}</b>&nbsp;BPM</span>
@@ -143,6 +176,8 @@ function PhoneShell() {
               <div className="shell-foot">
                 <button className="shell-next" onClick={next}>NEXT →</button>
               </div>
+            )}
+            </React.Fragment>
             )}
           </div>
         </IOSDevice>

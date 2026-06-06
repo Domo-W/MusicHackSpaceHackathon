@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0A0A0F" />
+  <title>THE SHOW — Stage · Set Complete</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="stage.css" />
+</head>
+<body class="ended">
+  <div id="viewport">
+    <div id="stageRoot">
+      <div id="ended" class="screen-state">
+        <header class="st-head">
+          <span class="st-live done"><i class="st-dot"></i>THE SHOW</span>
+          <span class="st-mode">SET COMPLETE</span>
+        </header>
+
+        <div class="ended-main">
+          <h1 class="ended-title">THE SET<br />YOU MADE</h1>
+          <div class="ended-stats">
+            <span class="es a"><b id="endTracks">9</b> TRACKS</span>
+            <span class="es-dash">·</span>
+            <span class="es b"><b id="endCrowd">240</b> IN THE ROOM</span>
+          </div>
+
+          <div class="ended-save">
+            <div class="qr-kicker save">SAVE THE PLAYLIST</div>
+            <div class="lobby-qr small"><canvas id="qrEnded" width="320" height="320"></canvas></div>
+            <div class="qr-url">THESHOW.LIVE/SET</div>
+            <div class="save-note">Already on your phone? Tap DOWNLOAD ALL.</div>
+          </div>
+        </div>
+
+        <div class="credits"><div class="credits-track" id="creditsTrack"></div></div>
+        <div class="state-hint">Thanks for writing the set with us — THE SHOW</div>
+      </div>
+    </div>
+  </div>
+
+  <template id="__bundler_thumbnail">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+      <rect width="100" height="100" fill="#050507"/>
+      <rect x="26" y="40" width="48" height="48" rx="8" fill="#fff"/>
+      <circle cx="50" cy="26" r="9" fill="#2DD36F"/>
+    </svg>
+  </template>
+
+  <script src="setlist.js?v=2"></script>
+  <script src="standalone-stage.js?v=1"></script>
+</body>
+</html>
