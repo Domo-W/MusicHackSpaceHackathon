@@ -6,7 +6,7 @@ import { songStore } from "./songStore.js";
 import { genreBpm } from "./tempo.js";
 import * as participants from "./participants.js";
 import * as tug from "./tug.js";
-import type { GenreInfo, Phase, Seed, ShowState, Side, Song } from "./types.js";
+import type { GenreInfo, Phase, SavedSong, Seed, ShowState, Side, Song } from "./types.js";
 
 // The real Between Sets flow, built on the generate-one-ahead spine.
 //
@@ -126,6 +126,31 @@ export function reset(): void {
   broadcast({ type: "show_reset" });
   broadcast({ type: "names", names: [] }); // clear the stage name cloud
   broadcastShowState();
+  broadcastTug();
+}
+
+/**
+ * Dashboard pressed "End show". Stop advancing and broadcast the recap: the set
+ * the crowd made tonight (the locally saved songs). Phones flip to ScreenRecap;
+ * the stage shows the finale. The pipeline gate / generationEpoch is left as-is
+ * (a later `reset` fully clears state for the next show).
+ */
+export async function endShow(): Promise<void> {
+  started = false;
+  held = false;
+  phase = "idle";
+  if (buzzerTimer) {
+    clearTimeout(buzzerTimer);
+    buzzerTimer = null;
+  }
+  let songs: SavedSong[] = [];
+  try {
+    songs = await songStore.list();
+  } catch (err) {
+    console.error("[show] endShow — could not list saved songs:", (err as Error).message);
+  }
+  console.log(`[show] ended — broadcasting recap (${songs.length} tracks)`);
+  broadcast({ type: "show_ended", songs });
   broadcastTug();
 }
 

@@ -70,6 +70,13 @@
     body.lobby #lobby { display: flex; }
     body.lobby #joinPanel { display: none; }          /* big QR replaces the corner one */
     body.lobby #viewport .overlay { opacity: 0; }      /* hide battle readouts pre-show */
+
+    /* SET COMPLETE finale: hide all the live chrome behind the #ended overlay */
+    body.ended #lobby { display: none; }
+    body.ended #joinPanel,
+    body.ended #revealTicker,
+    body.ended #revealOverlay,
+    body.ended #audioGate { display: none; }
     /* two columns: live name cloud (left) + scan-to-join panel (right) */
     #lobby { gap: 44px; padding: 40px 56px; box-sizing: border-box; }
     .lobby-cloud { flex: 1 1 auto; align-self: stretch; display: flex; flex-direction: column; min-width: 0; position: relative; }
@@ -170,6 +177,34 @@
         <span class="wf-name" id="wfName"></span>
         <span class="wf-sub" id="wfSub"></span>
       </div>
+
+      <!-- SET COMPLETE finale (merged from design-handoff). Shows via body.ended,
+           cross-fading over the battlefront. Driven by stage-reveal.js. -->
+      <div id="ended" class="screen-state">
+        <header class="st-head">
+          <span class="st-live done"><i class="st-dot"></i>THE SHOW</span>
+          <span class="st-mode">SET COMPLETE</span>
+        </header>
+
+        <div class="ended-main">
+          <h1 class="ended-title">THE SET<br />YOU MADE</h1>
+          <div class="ended-stats">
+            <span class="es a"><b id="endTracks">0</b> TRACKS</span>
+            <span class="es-dash">·</span>
+            <span class="es b"><b id="endCrowd">0</b> IN THE ROOM</span>
+          </div>
+
+          <div class="ended-save">
+            <div class="qr-kicker save">SAVE THE PLAYLIST</div>
+            <div class="lobby-qr small"><img src="/qr" alt="scan to save the set" /></div>
+            <div class="qr-url" id="endedUrl">…</div>
+            <div class="save-note">Already on your phone? Tap DOWNLOAD ALL.</div>
+          </div>
+        </div>
+
+        <div class="credits"><div class="credits-track" id="creditsTrack"></div></div>
+        <div class="state-hint">Thanks for writing the set with us — THE SHOW</div>
+      </div>
     </div>
   </div>
 
@@ -217,7 +252,7 @@
     fetch('/api/info').then(function (r) { return r.json(); }).then(function (d) {
       if (!d.joinUrl) return;
       var u = d.joinUrl.replace(/^https?:\/\//, '');
-      ['joinUrl', 'lobbyUrl'].forEach(function (id) { var el = document.getElementById(id); if (el) el.textContent = u; });
+      ['joinUrl', 'lobbyUrl', 'endedUrl'].forEach(function (id) { var el = document.getElementById(id); if (el) el.textContent = u; });
     }).catch(function () {});
   </script>
 </body>

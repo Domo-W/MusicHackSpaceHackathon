@@ -15,6 +15,7 @@ import {
   hold,
   resume,
   reset,
+  endShow,
   endVote,
   handlePull,
   handleAnswer,
@@ -158,6 +159,9 @@ wss.on("connection", (ws) => {
         break;
       case "reset":
         reset();
+        break;
+      case "end":
+        void endShow();
         break;
       case "endVote":
         endVote();

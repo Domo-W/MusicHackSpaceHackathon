@@ -364,6 +364,7 @@
     actionGrid.appendChild(holdBtn);
     actionGrid.appendChild(resumeBtn);
     actionGrid.appendChild(makeBtn("Reset Show", "dnp-action dnp-action-danger", function () { Net.send({ type: "reset" }); status("show reset to lobby"); }));
+    actionGrid.appendChild(makeBtn("End Show", "dnp-action dnp-action-danger", function () { Net.send({ type: "end" }); status("end show → recap"); }));
     actionsMenu.appendChild(actionGrid);
 
     var secWrap = document.createElement("label");

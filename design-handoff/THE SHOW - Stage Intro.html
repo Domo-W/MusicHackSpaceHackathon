@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0A0A0F" />
+  <title>THE SHOW — Stage · Doors Open</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="stage.css" />
+</head>
+<body class="intro">
+  <div id="viewport">
+    <div id="stageRoot">
+      <div id="intro" class="screen-state">
+        <header class="st-head">
+          <span class="st-live"><i class="st-dot"></i>DOORS OPEN — THE SHOW</span>
+          <span class="st-mode">AUDIENCE-GENERATED LIVE SET</span>
+        </header>
+
+        <div class="lobby">
+          <div class="lobby-main">
+            <svg class="disc-glyph" viewBox="0 0 120 120" aria-hidden="true">
+              <clipPath id="discL"><rect x="0" y="0" width="58" height="120" /></clipPath>
+              <clipPath id="discR"><rect x="62" y="0" width="58" height="120" /></clipPath>
+              <circle cx="60" cy="60" r="54" fill="#00E5FF" clip-path="url(#discL)" />
+              <circle cx="60" cy="60" r="54" fill="#FF1A8C" clip-path="url(#discR)" />
+              <rect x="57.5" y="3" width="5" height="114" fill="#fff" />
+              <circle cx="60" cy="60" r="12" fill="#050507" />
+              <circle cx="60" cy="60" r="3.5" fill="#fff" />
+            </svg>
+            <h1 class="lobby-title">BETWEEN<br />SETS</h1>
+            <div class="lobby-sub">YOUR VOICE, YOUR ANTHEM</div>
+          </div>
+
+          <div class="lobby-join">
+            <div class="lobby-qr"><canvas id="qrIntro" width="380" height="380"></canvas></div>
+            <div class="qr-kicker">SCAN TO JOIN</div>
+            <div class="qr-url">THESHOW.LIVE/JOIN</div>
+          </div>
+        </div>
+
+        <div class="state-hint">Your phone becomes your voice in the set — scan to step in</div>
+      </div>
+    </div>
+  </div>
+
+  <template id="__bundler_thumbnail">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+      <rect width="100" height="100" fill="#050507"/>
+      <circle cx="50" cy="50" r="30" fill="#00E5FF"/>
+      <path d="M50 20 A30 30 0 0 1 50 80 Z" fill="#FF1A8C"/>
+      <rect x="47" y="18" width="6" height="64" fill="#fff"/>
+    </svg>
+  </template>
+
+  <script src="setlist.js?v=2"></script>
+  <script src="standalone-stage.js?v=1"></script>
+</body>
+</html>
