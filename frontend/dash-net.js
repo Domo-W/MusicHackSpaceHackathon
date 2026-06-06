@@ -169,6 +169,22 @@
     bar.appendChild(statusEl);
 
     document.body.appendChild(bar);
+
+    // Our fixed control bar would otherwise cover the partner's bottom "PUSH TO
+    // CROWD" buttons (the dashboard is a fixed design scaled to fill the screen).
+    // Scale the whole dashboard viewport down just enough to leave room for the
+    // bar below it — everything stays visible, no scrolling.
+    function fitForBar() {
+      var vp = document.getElementById("viewport");
+      if (!vp) return;
+      var barH = bar.getBoundingClientRect().height || 60;
+      var vh = window.innerHeight || 800;
+      var scale = Math.max(0.55, (vh - barH - 10) / vh);
+      vp.style.transformOrigin = "top center";
+      vp.style.transform = "scale(" + scale + ")";
+    }
+    requestAnimationFrame(fitForBar);
+    window.addEventListener("resize", fitForBar);
   }
 
   // ============================================================
@@ -199,9 +215,27 @@
     });
   }
 
+  // Auto-sync the DJ's selected genres to the backend so the phone vote ALWAYS
+  // reflects the dashboard — no need to remember to hit "push". Polls the
+  // partner's window.DJConsoleState (updated live as they pick A/B genres).
+  function autoSyncGenres() {
+    var last = "";
+    setInterval(function () {
+      var s = window.DJConsoleState;
+      if (!s || s.sideA == null || s.sideB == null) return;
+      var key = String(s.sideA) + "|" + String(s.sideB);
+      if (key === last) return;
+      last = key;
+      var msg = { type: "config", genreA: genreInfo("A", s.sideA), genreB: genreInfo("B", s.sideB) };
+      Net.send(msg);
+      status("genres → " + msg.genreA.name + " vs " + msg.genreB.name);
+    }, 700);
+  }
+
   function init() {
     buildStrip();
     wireStatus();
+    autoSyncGenres();
     status("ready" + (Net.ready() ? " · connected" : ""));
   }
 

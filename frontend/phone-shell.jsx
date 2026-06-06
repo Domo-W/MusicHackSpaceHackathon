@@ -123,7 +123,7 @@ function PhoneShell() {
                 ) : screen === 'intent' ? (
                   <ScreenIntent active onAdvance={next} />
                 ) : (
-                  <ScreenTug active />
+                  <VoteScreen />
                 )}
               </div>
             </div>
@@ -171,6 +171,65 @@ function LoadingScreen({ reveal }) {
       ) : (
         <p className="vibe-help">Cooking the next drop from the crowd…</p>
       )}
+    </div>
+  );
+}
+
+/* VOTE: two big genre buttons — tap or hold either one to pull for that genre.
+   Replaces the partner's pick-a-side ScreenTug (no side-select, no localStorage,
+   no white-screen). Genre names + live % come from the networked window.Tug. */
+function VoteScreen() {
+  const [, force] = useState(0);
+  const tugRef = useRef(window.Tug.getState());
+  useEffect(() => {
+    let raf = null;
+    const off = window.Tug.on('tug', (s) => {
+      tugRef.current = s;
+      if (!raf) raf = requestAnimationFrame(() => { raf = null; force((n) => n + 1); });
+    });
+    return () => { off(); if (raf) cancelAnimationFrame(raf); };
+  }, []);
+
+  const holdRef = useRef(null);
+  const fire = (side) => { try { window.Tug.pull(side, 0.62); } catch (e) {} if (navigator.vibrate) navigator.vibrate(12); };
+  const down = (side) => (e) => {
+    e.preventDefault();
+    fire(side);
+    if (holdRef.current) clearInterval(holdRef.current);
+    holdRef.current = setInterval(() => fire(side), 110); // hold = rapid auto-fire
+  };
+  const up = () => { if (holdRef.current) { clearInterval(holdRef.current); holdRef.current = null; } };
+  useEffect(() => () => up(), []);
+
+  const t = tugRef.current;
+  const G = window.Tug.GENRES;
+  const aPct = Math.round((1 - t.p) * 100);
+  const pct = { A: aPct, B: 100 - aPct };
+
+  const btn = (side) => {
+    const g = G[side] || { name: side, color: side === 'A' ? '#00E5FF' : '#FF1A8C' };
+    return (
+      <button
+        className={'vs-btn vs-' + side.toLowerCase() + (pct[side] >= 50 ? ' lead' : '')}
+        style={{ '--c': g.color }}
+        onPointerDown={down(side)}
+        onPointerUp={up}
+        onPointerLeave={up}
+        onPointerCancel={up}
+        onContextMenu={(e) => e.preventDefault()}
+      >
+        <span className="vs-fill" style={{ height: pct[side] + '%' }} />
+        <span className="vs-genre">{g.name}</span>
+        <span className="vs-pct">{pct[side]}<i>%</i></span>
+        <span className="vs-cta"><i className="vs-dot" />HOLD TO PULL</span>
+      </button>
+    );
+  };
+
+  return (
+    <div className="screen votescreen">
+      <div className="vs-kicker">TAP OR HOLD TO PULL YOUR GENRE</div>
+      <div className="vs-grid">{btn('A')}{btn('B')}</div>
     </div>
   );
 }
