@@ -44,6 +44,8 @@ Also emits `"__open"` / `"__close"`. Load `net.js` BEFORE the `net-*` seam scrip
 | `{type:"start"}` | dashboard | begin the show |
 | `{type:"config", question?, genreA?, genreB?, collectSeconds?}` | dashboard | set question + the two genres (GenreInfo) |
 | `{type:"skip"\|"hold"\|"resume"}` | dashboard | overrides |
+| `{type:"playbackControl", action:"play"\|"pause"}` | dashboard | control stage playback |
+| `{type:"playbackState", playing, canSkip, song?}` | stage | report current player state |
 
 ## Server → clients  (see `ServerMsg` in types.ts)
 
@@ -59,6 +61,8 @@ Also emits `"__open"` / `"__close"`. Load `net.js` BEFORE the `net-*` seam scrip
 | `{type:"song_cancelled", id}` | stage | discard a skipped queued song |
 | `{type:"now_playing", id}` | all | a song is current |
 | `{type:"show_reset"}` | stage | stop and clear stage audio |
+| `{type:"playback_control", action}` | stage | play/pause command from dashboard |
+| `{type:"playback_state", playing, canSkip, song?}` | dashboard | current stage player state |
 
 ## Local song archive
 

@@ -51,7 +51,11 @@ function App() {
 
   // scale to fit
   useEffect(() => {
-    const fit = () => setScale(Math.min(window.innerWidth / 1440, window.innerHeight / 900));
+    const fit = () => {
+      const player = document.getElementById('dashNetBar');
+      const playerHeight = player ? player.getBoundingClientRect().height + 10 : 0;
+      setScale(Math.min(window.innerWidth / 1440, (window.innerHeight - playerHeight) / 900));
+    };
     fit(); window.addEventListener('resize', fit);
     return () => window.removeEventListener('resize', fit);
   }, []);

@@ -76,6 +76,11 @@ app.use(express.static(frontendDir));
 
 const server = createServer(app);
 const wss = new WebSocketServer({ server });
+let playbackState: Extract<ServerMsg, { type: "playback_state" }> = {
+  type: "playback_state",
+  playing: false,
+  canSkip: false,
+};
 
 // Broadcast helper wired into the bus so showMachine can reach all clients.
 setSender((msg: ServerMsg) => {
@@ -92,6 +97,7 @@ wss.on("connection", (ws) => {
   console.log("[ws] client connected");
   // Seed the new client (e.g. a freshly-loaded stage) with the current names.
   ws.send(JSON.stringify({ type: "names", names: names() } as ServerMsg));
+  ws.send(JSON.stringify(playbackState));
 
   ws.on("message", (raw) => {
     let msg: ClientMsg;
@@ -146,6 +152,18 @@ wss.on("connection", (ws) => {
         break;
       case "forceNext":
         broadcast({ type: "force_next" });
+        break;
+      case "playbackControl":
+        broadcast({ type: "playback_control", action: msg.action });
+        break;
+      case "playbackState":
+        playbackState = {
+          type: "playback_state",
+          playing: msg.playing,
+          canSkip: msg.canSkip,
+          song: msg.song,
+        };
+        broadcast(playbackState);
         break;
       default:
         break;

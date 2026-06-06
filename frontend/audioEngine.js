@@ -22,6 +22,9 @@
   let pending = null;
   let crossTimer = null;
   let crossing = false;
+  let paused = false;
+  let pausedAt = null;
+  let onState = () => {};
 
   const now = () => performance.now() / 1000;
 
@@ -43,6 +46,7 @@
     current = voice;
     voice.el.play().catch((e) => console.warn("play() blocked:", e.message));
     onPlaying(voice.song.id);
+    emitState();
     log(`▶ playing ${voice.song.id} — ${voice.song.name} · ${voice.song.genre}`);
   }
 
@@ -50,7 +54,7 @@
   // short minimum. (Called when `pending` arrives.) If pending shows up after the
   // minimum, wait is 0 → crossfade immediately, no long gap.
   function maybeCross() {
-    if (!current || !pending || crossing) return;
+    if (!current || !pending || crossing || paused) return;
     const elapsed = now() - current.startedAt;
     const wait = Math.max(0, minPlaySec - elapsed);
     if (crossTimer) clearTimeout(crossTimer);
@@ -60,7 +64,7 @@
 
   // Force the crossfade now (dashboard "Next song" / testing).
   function forceCross() {
-    if (current && pending && !crossing) {
+    if (current && pending && !crossing && !paused) {
       if (crossTimer) clearTimeout(crossTimer);
       crossfade();
     }
@@ -93,6 +97,7 @@
         current = to;
         crossing = false;
         onPlaying(to.song.id);
+        emitState();
         log(`✓ now playing ${to.song.id}`);
         maybeCross(); // in case the next one is already queued
       }
@@ -105,10 +110,35 @@
       fadeSec = opts.fadeSec ?? fadeSec;
       minPlaySec = opts.minPlaySec ?? opts.segmentSec ?? minPlaySec;
       onPlaying = opts.onPlaying ?? onPlaying;
+      onState = opts.onState ?? onState;
+      emitState();
     },
 
     // Force the next song in now (testing / dashboard "Next song").
     forceNext() { forceCross(); },
+
+    pause() {
+      if (paused || !current) return;
+      paused = true;
+      pausedAt = now();
+      if (crossTimer) clearTimeout(crossTimer);
+      crossTimer = null;
+      voices.forEach((voice) => voice.el.pause());
+      emitState();
+      log(`Ⅱ paused ${current.song.id}`);
+    },
+
+    play() {
+      if (!paused || !current) return;
+      const pauseDuration = pausedAt == null ? 0 : now() - pausedAt;
+      current.startedAt += pauseDuration;
+      paused = false;
+      pausedAt = null;
+      current.el.play().catch((e) => console.warn("play() blocked:", e.message));
+      emitState();
+      maybeCross();
+      log(`▶ resumed ${current.song.id}`);
+    },
 
     // Remove a skipped song if it is queued. Never stop the current song here.
     cancel(id) {
@@ -119,6 +149,7 @@
       pending.el.src = "";
       voices.delete(id);
       pending = null;
+      emitState();
       log(`× cancelled queued ${id}`);
     },
 
@@ -134,6 +165,9 @@
       current = null;
       pending = null;
       crossing = false;
+      paused = false;
+      pausedAt = null;
+      emitState();
       log("■ audio reset");
     },
 
@@ -144,6 +178,7 @@
       if (!current) makeCurrent(voice); // cold start
       else {
         pending = voice;
+        emitState();
         maybeCross();
       }
     },
@@ -157,6 +192,14 @@
       log(`⏱ ${id} final m4a ready`);
     },
   };
+
+  function emitState() {
+    onState({
+      playing: !!current && !paused,
+      canSkip: !!pending,
+      song: current ? current.song : null,
+    });
+  }
 
   function log(msg) {
     if (window.__spineLog) window.__spineLog(msg);
