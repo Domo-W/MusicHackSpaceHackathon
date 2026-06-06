@@ -70,22 +70,38 @@
     body.lobby #lobby { display: flex; }
     body.lobby #joinPanel { display: none; }          /* big QR replaces the corner one */
     body.lobby #viewport .overlay { opacity: 0; }      /* hide battle readouts pre-show */
-    .lobby-inner { display: flex; flex-direction: column; align-items: center; gap: 22px; text-align: center; }
-    .lobby-kicker {
-      font-family: var(--mono); font-weight: 700; font-size: 22px; letter-spacing: 0.3em;
-      color: rgba(255,255,255,0.6); display: flex; align-items: center; gap: 10px;
-    }
+    /* two columns: live name cloud (left) + scan-to-join panel (right) */
+    #lobby { gap: 44px; padding: 40px 56px; box-sizing: border-box; }
+    .lobby-cloud { flex: 1 1 auto; align-self: stretch; display: flex; flex-direction: column; min-width: 0; position: relative; }
+    .lobby-kicker { font-family: var(--mono); font-weight: 700; font-size: 22px; letter-spacing: 0.3em; color: rgba(255,255,255,0.55); display: flex; align-items: center; gap: 10px; flex: 0 0 auto; }
     .lobby-kicker i { width: 12px; height: 12px; border-radius: 50%; background: #2dd36f; box-shadow: 0 0 12px #2dd36f; }
-    .lobby-title {
-      font-family: var(--disp); font-weight: 700; font-size: 92px; letter-spacing: 0.02em; margin: 0;
-      background: linear-gradient(90deg, var(--cyan), #fff 50%, var(--magenta));
-      -webkit-background-clip: text; background-clip: text; color: transparent;
+    .name-cloud { flex: 1 1 auto; display: flex; flex-wrap: wrap; align-content: center; justify-content: center; align-items: center; overflow: hidden; padding: 20px 0; }
+    .cloud-empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-family: var(--mono); font-size: 22px; color: rgba(255,255,255,0.28); pointer-events: none; text-align: center; }
+    .nc-name {
+      display: inline-block; margin: 10px 16px; font-family: var(--disp); font-weight: 700; font-size: 32px;
+      text-transform: uppercase; line-height: 1; text-shadow: 0 0 18px currentColor; white-space: nowrap;
+      opacity: 0; transition: opacity .55s ease; will-change: transform;
+      animation: ncfloat var(--fd, 4s) ease-in-out var(--fdel, 0s) infinite;
     }
-    .lobby-qr { width: 360px; height: 360px; background: #fff; border-radius: 22px; padding: 16px; box-sizing: border-box; box-shadow: 0 0 80px rgba(0,229,255,0.25); }
+    .nc-name.in { opacity: 1; }
+    @keyframes ncfloat {
+      0%   { transform: translate(0, 0) rotate(var(--rot, 0deg)); }
+      25%  { transform: translate(6px, -10px) rotate(var(--rot, 0deg)); }
+      50%  { transform: translate(-5px, -16px) rotate(var(--rot, 0deg)); }
+      75%  { transform: translate(-7px, -6px) rotate(var(--rot, 0deg)); }
+      100% { transform: translate(0, 0) rotate(var(--rot, 0deg)); }
+    }
+
+    .lobby-join { flex: 0 0 380px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+      padding: 30px; border-radius: 28px; background: rgba(10,10,16,0.5); border: 1px solid rgba(255,255,255,0.1); }
+    .lj-title { font-family: var(--disp); font-weight: 700; font-size: 46px; line-height: 0.95; text-align: center;
+      background: linear-gradient(90deg, var(--cyan), #fff 50%, var(--magenta)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .lobby-qr { width: 300px; height: 300px; background: #fff; border-radius: 18px; padding: 12px; box-sizing: border-box; box-shadow: 0 0 60px rgba(0,229,255,0.2); }
     .lobby-qr img { width: 100%; height: 100%; display: block; }
-    .lobby-url { font-family: var(--mono); font-size: 22px; color: rgba(255,255,255,0.8); }
-    .lobby-meta { font-family: var(--mono); font-size: 20px; color: rgba(255,255,255,0.5); }
+    .lobby-url { font-family: var(--mono); font-size: 17px; color: rgba(255,255,255,0.72); }
+    .lobby-meta { font-family: var(--mono); font-size: 18px; color: rgba(255,255,255,0.5); }
     .lobby-meta b { color: var(--cyan); }
+    .lj-wait { font-family: var(--mono); font-size: 15px; color: rgba(255,255,255,0.4); }
 
     /* ---- audio enable hint (one click anywhere unlocks sound) ---- */
     #audioGate {
@@ -163,12 +179,17 @@
 
   <!-- LOBBY (phase idle): big scan-to-join while waiting for the DJ to start -->
   <div id="lobby">
-    <div class="lobby-inner">
+    <div class="lobby-cloud">
       <div class="lobby-kicker"><i></i> LIVE — THE SHOW</div>
-      <h1 class="lobby-title">SCAN TO JOIN</h1>
+      <div id="nameCloud" class="name-cloud"></div>
+      <div class="cloud-empty" id="cloudEmpty">the room is empty — scan to be the first in</div>
+    </div>
+    <div class="lobby-join">
+      <div class="lj-title">SCAN<br />TO JOIN</div>
       <div class="lobby-qr"><img src="/qr" alt="scan to join" /></div>
       <div class="lobby-url" id="lobbyUrl">…</div>
-      <div class="lobby-meta"><b id="lobbyCount">0</b> in the room · waiting for the DJ to start</div>
+      <div class="lobby-meta"><b id="lobbyCount">0</b> in the room</div>
+      <div class="lj-wait">waiting for the DJ to start…</div>
     </div>
   </div>
 

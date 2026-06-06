@@ -6,7 +6,7 @@ import express from "express";
 import QRCode from "qrcode";
 import { WebSocketServer, WebSocket } from "ws";
 import { CONFIG } from "./config.js";
-import { setSender } from "./bus.js";
+import { setSender, broadcast } from "./bus.js";
 import {
   startShow,
   onPlaying,
@@ -18,7 +18,7 @@ import {
   handlePull,
   handleAnswer,
 } from "./showMachine.js";
-import { join, remove } from "./participants.js";
+import { join, remove, names } from "./participants.js";
 import type { ClientMsg, ServerMsg } from "./types.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -66,6 +66,8 @@ const wsParticipant = new WeakMap<WebSocket, string>();
 
 wss.on("connection", (ws) => {
   console.log("[ws] client connected");
+  // Seed the new client (e.g. a freshly-loaded stage) with the current names.
+  ws.send(JSON.stringify({ type: "names", names: names() } as ServerMsg));
 
   ws.on("message", (raw) => {
     let msg: ClientMsg;
@@ -81,6 +83,8 @@ wss.on("connection", (ws) => {
         wsParticipant.set(ws, id);
         const reply: ServerMsg = { type: "joined", participantId: id };
         if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(reply));
+        const nm = (msg.name || "").trim();
+        if (nm) broadcast({ type: "name", name: nm }); // grow the stage name cloud
         break;
       }
       case "answer":

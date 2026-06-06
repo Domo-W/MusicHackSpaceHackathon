@@ -97,6 +97,15 @@ function PhoneShell() {
     }
   }, [loading, screen, joined, seq]);
 
+  // INTENT step: focus the field as soon as it shows so the keyboard is up
+  // (desktop). iOS needs a tap to open the soft keyboard — unavoidable there.
+  useEffect(() => {
+    if (!loading && screen === 'intent') {
+      const id = setTimeout(() => { const el = document.querySelector('.intent-input'); if (el) { try { el.focus(); } catch (e) {} } }, 200);
+      return () => clearTimeout(id);
+    }
+  }, [loading, screen]);
+
   // ---- render ----
   const Stage = (
     <div id="stage">

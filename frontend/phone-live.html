@@ -74,6 +74,13 @@
     .vs-cta { position:absolute; bottom:18px; left:0; right:0; z-index:1; display:flex; align-items:center; justify-content:center; gap:7px; font:700 11px/1 'JetBrains Mono',monospace; letter-spacing:0.12em; color:rgba(255,255,255,0.6); }
     .vs-dot { width:8px; height:8px; border-radius:50%; background:var(--c); box-shadow:0 0 8px var(--c); animation:vspulse 1.1s ease-in-out infinite; }
     @keyframes vspulse { 0%,100%{opacity:.4; transform:scale(.85);} 50%{opacity:1; transform:scale(1.15);} }
+
+    /* INTENT ("I want to…"): center the input vertically so it isn't stranded at
+       the top with a big empty gap (and sits nearer the thumb/keyboard). */
+    .screen.intent { display:flex; flex-direction:column; }
+    .screen.intent .intent-head { flex:0 0 auto; }
+    .screen.intent .intent-box-wrap { margin-top:auto; margin-bottom:auto; }
+    .screen.intent .intent-foot { flex:0 0 auto; }
   </style>
 </head>
 <body>

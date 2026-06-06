@@ -52,6 +52,8 @@ export type ClientMsg =
 // ---------------- server → clients ----------------
 export type ServerMsg =
   | { type: "joined"; participantId: string }
+  | { type: "name"; name: string } // a participant just joined — add to the name cloud
+  | { type: "names"; names: string[] } // full snapshot (sent on connect; cleared on reset)
   // ~15Hz tug + crowd snapshot (the authoritative aggregate; clients render/integrate locally)
   | {
       type: "tug";

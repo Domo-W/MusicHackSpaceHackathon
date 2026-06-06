@@ -122,6 +122,43 @@
     if (lobbyCount && typeof m.crowdSize === "number") lobbyCount.textContent = m.crowdSize;
   });
 
+  // ---- LIVE NAME CLOUD: grows as people submit their name ----
+  var nameCloud = document.getElementById("nameCloud");
+  var cloudEmpty = document.getElementById("cloudEmpty");
+  var NC_SIZES = [26, 32, 40, 30, 48, 28, 36, 34];
+  var NC_COLORS = ["var(--cyan)", "var(--magenta)", "#ffffff", "var(--cyan)", "var(--magenta)"];
+  var shown = {}; // name -> element, so adds are idempotent (no flicker on re-broadcast)
+  function updateEmpty() {
+    if (cloudEmpty) cloudEmpty.style.display = Object.keys(shown).length ? "none" : "";
+  }
+  function addName(name) {
+    if (!nameCloud || !name || shown[name]) return;
+    var el = document.createElement("span");
+    el.className = "nc-name";
+    el.textContent = name; // audience input → textContent, never innerHTML
+    el.style.fontSize = NC_SIZES[Math.floor(Math.random() * NC_SIZES.length)] + "px";
+    el.style.color = NC_COLORS[Math.floor(Math.random() * NC_COLORS.length)];
+    // per-name drift so the cloud is alive (mentimeter-like), each out of sync
+    el.style.setProperty("--fd", (3.4 + Math.random() * 3).toFixed(2) + "s");
+    el.style.setProperty("--fdel", (-Math.random() * 5).toFixed(2) + "s");
+    el.style.setProperty("--rot", (Math.random() * 8 - 4).toFixed(1) + "deg");
+    shown[name] = el;
+    nameCloud.appendChild(el);
+    requestAnimationFrame(function () { el.classList.add("in"); });
+    updateEmpty();
+  }
+  // Reconcile to the authoritative list: add missing, remove gone (clears on reset).
+  function reconcile(list) {
+    var keep = {};
+    list.forEach(function (n) { keep[n] = true; addName(n); });
+    Object.keys(shown).forEach(function (n) {
+      if (!keep[n]) { var el = shown[n]; if (el && el.parentNode) el.parentNode.removeChild(el); delete shown[n]; }
+    });
+    updateEmpty();
+  }
+  Net.on("name", function (m) { if (m && m.name) addName(m.name); });
+  Net.on("names", function (m) { reconcile((m && m.names) || []); });
+
   // ---- audio unlock: browsers block audio until a user gesture. The DJ starts
   // the show from the dashboard, so the stage just needs ONE click anywhere to
   // enable sound. A small banner hints at it; any click dismisses + unlocks. ----
@@ -134,4 +171,14 @@
     if (gate) gate.dataset.on = "0";
   }
   document.addEventListener("click", unlockAudio);
+
+  // ---- hide the mouse on the projector when idle (reappears on movement) ----
+  var cursorTimer = null;
+  function pokeCursor() {
+    document.body.style.cursor = "";
+    if (cursorTimer) clearTimeout(cursorTimer);
+    cursorTimer = setTimeout(function () { document.body.style.cursor = "none"; }, 2500);
+  }
+  document.addEventListener("mousemove", pokeCursor);
+  pokeCursor();
 })();

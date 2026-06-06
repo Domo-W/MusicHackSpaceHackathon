@@ -56,6 +56,11 @@ export function count(): number {
   return byId.size;
 }
 
+/** All joined names, in join order (for the stage name cloud). */
+export function names(): string[] {
+  return [...byId.values()].map((p) => p.name);
+}
+
 /**
  * Pick a random participant among everyone who has submitted an intent (intents
  * persist across rounds). Prefers someone other than the previous pick so a

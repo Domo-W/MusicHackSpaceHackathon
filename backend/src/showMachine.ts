@@ -40,6 +40,11 @@ tug.reset(genreA, genreB);
 // show the "scan to join" lobby (crowd count, phase) before the DJ starts.
 startTugLoop();
 
+// Periodically re-broadcast the name list so a freshly-loaded stage seeds its
+// name cloud even if it missed the connect-time snapshot. The client reconciles
+// idempotently (adds missing, removes gone) so this never causes a flicker.
+setInterval(() => broadcast({ type: "names", names: participants.names() }), 4000);
+
 // ---------------- public message handlers ----------------
 
 /** Reset everything to a blank lobby state (dashboard "Reset"). */
@@ -56,6 +61,7 @@ export function reset(): void {
   tug.reset(genreA, genreB);
   participants.reset();
   console.log("[show] reset → blank lobby");
+  broadcast({ type: "names", names: [] }); // clear the stage name cloud
   broadcastTug();
 }
 
