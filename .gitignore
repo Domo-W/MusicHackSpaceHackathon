@@ -1,0 +1,21 @@
+# secrets — never commit
+.env
+.env.*
+!.env.example
+
+# deps / build
+node_modules/
+dist/
+build/
+.vite/
+
+# os / editor
+.DS_Store
+*.log
+.idea/
+.vscode/
+
+# local audio/test artifacts
+tmp/
+*.mp3
+*.wav

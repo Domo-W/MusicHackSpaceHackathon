@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Between Sets — Spine Test</title>
+  <style>
+    :root { color-scheme: dark; }
+    body { margin: 0; font: 15px/1.5 ui-monospace, Menlo, monospace; background: #0a0a0f; color: #e8e8f0; }
+    header { padding: 18px 22px; border-bottom: 1px solid #222; display: flex; align-items: center; gap: 16px; }
+    h1 { font-size: 16px; margin: 0; letter-spacing: 0.08em; color: #ff1a8c; }
+    button { font: inherit; padding: 10px 20px; border: 0; border-radius: 8px; background: #00e5ff; color: #001014; font-weight: 700; cursor: pointer; }
+    button:disabled { opacity: 0.4; cursor: default; }
+    .wrap { display: grid; grid-template-columns: 1fr 1fr; gap: 0; height: calc(100vh - 61px); }
+    .panel { padding: 22px; overflow: auto; }
+    .panel + .panel { border-left: 1px solid #222; }
+    .now { font-size: 22px; font-weight: 700; }
+    .now .name { color: #00e5ff; }
+    .now .genre { color: #ff1a8c; }
+    .meta { color: #888; margin: 4px 0 16px; }
+    pre.lyrics { white-space: pre-wrap; color: #cfcfe0; background: #111119; padding: 14px; border-radius: 8px; }
+    #log { font-size: 13px; color: #9a9ab0; }
+    #log div { padding: 2px 0; border-bottom: 1px solid #16161f; }
+    .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: #444; margin-right: 8px; }
+    .dot.live { background: #2dd36f; box-shadow: 0 0 8px #2dd36f; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>BETWEEN SETS — SPINE</h1>
+    <button id="start">▶ Start show</button>
+    <span><span class="dot" id="dot"></span><span id="conn">connecting…</span></span>
+  </header>
+  <div class="wrap">
+    <div class="panel">
+      <div class="now" id="now">— press start —</div>
+      <div class="meta" id="meta"></div>
+      <pre class="lyrics" id="lyrics"></pre>
+    </div>
+    <div class="panel">
+      <div style="color:#888;margin-bottom:8px;">event log</div>
+      <div id="log"></div>
+    </div>
+  </div>
+
+  <script src="audioEngine.js"></script>
+  <script>
+    const proto = location.protocol === "https:" ? "wss" : "ws";
+    const ws = new WebSocket(`${proto}://${location.host}`);
+    const $ = (id) => document.getElementById(id);
+
+    window.__spineLog = (msg) => {
+      const d = document.createElement("div");
+      d.textContent = `${new Date().toLocaleTimeString()}  ${msg}`;
+      $("log").prepend(d);
+    };
+
+    const seg = Number(new URLSearchParams(location.search).get("seg")) || 70;
+    AudioEngine.init({
+      fadeSec: 6,
+      segmentSec: seg, // each song plays ~seg seconds, then crossfades
+      onPlaying: (id) => ws.readyState === 1 && ws.send(JSON.stringify({ type: "playing", id })),
+    });
+
+    ws.onopen = () => { $("conn").textContent = "connected"; $("dot").classList.add("live"); };
+    ws.onclose = () => { $("conn").textContent = "disconnected"; $("dot").classList.remove("live"); };
+
+    ws.onmessage = (e) => {
+      const m = JSON.parse(e.data);
+      if (m.type === "generating") {
+        window.__spineLog(`✎ crafting ${m.seed.name}'s song (${m.seed.genre}) — round ${m.roundIndex}`);
+      } else if (m.type === "song_ready") {
+        AudioEngine.ready(m.song);
+        // m.song.name is audience-typed input — build with textContent, never innerHTML.
+        const now = $("now");
+        now.textContent = "Next up: ";
+        const nameEl = document.createElement("span");
+        nameEl.className = "name";
+        nameEl.textContent = m.song.name;
+        const genreEl = document.createElement("span");
+        genreEl.className = "genre";
+        genreEl.textContent = m.song.genre;
+        now.append(nameEl, document.createTextNode(" · "), genreEl);
+        $("meta").textContent = m.song.title;
+        $("lyrics").textContent = m.song.lyrics;
+      } else if (m.type === "song_final") {
+        AudioEngine.final(m.id, m.finalUrl);
+      }
+    };
+
+    $("start").onclick = () => {
+      // user gesture: unblock audio playback, then tell the backend to begin
+      ws.send(JSON.stringify({ type: "start" }));
+      $("start").disabled = true;
+      $("now").textContent = "starting…";
+    };
+  </script>
+</body>
+</html>

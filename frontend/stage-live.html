@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0A0A0F" />
+  <title>THE SHOW — Stage (Live) · Genre Tug-of-War</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="stage.css" />
+  <style>
+    /* ---- live additions: reveal overlay + start button (own layer) ----
+       Sibling of #viewport, fixed full-viewport, so the "song drop" reveal
+       does NOT inherit #stageRoot's letterbox scale() transform. */
+
+    /* subtle "crafting <name>'s song…" ticker, bottom-left */
+    #revealTicker {
+      position: fixed; left: 28px; bottom: 18px; z-index: 60;
+      font-family: var(--mono); font-size: 18px; letter-spacing: 0.12em;
+      text-transform: lowercase; color: rgba(255,255,255,0.78);
+      padding: 8px 16px; border-radius: 999px;
+      background: rgba(8,8,14,0.55); border: 1px solid rgba(255,255,255,0.12);
+      backdrop-filter: blur(6px);
+      opacity: 0; transform: translateY(8px); transition: opacity .4s ease, transform .4s ease;
+      pointer-events: none; max-width: 70vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    #revealTicker[data-on="1"] { opacity: 1; transform: translateY(0); }
+    #revealTicker .tk-name { color: var(--cyan); font-weight: 700; }
+
+    /* BIG full-screen drop reveal */
+    #revealOverlay {
+      position: fixed; inset: 0; z-index: 80;
+      display: flex; align-items: center; justify-content: center;
+      pointer-events: none;
+      background: radial-gradient(circle at 50% 45%, rgba(5,5,7,0.78) 0%, rgba(5,5,7,0.95) 70%);
+      opacity: 0; transition: opacity .6s ease;
+    }
+    #revealOverlay[data-on="1"] { opacity: 1; }
+    #revealOverlay .rv-card {
+      display: flex; flex-direction: column; align-items: center; gap: 28px;
+      text-align: center; padding: 0 6vw; max-width: 92vw;
+      transform: scale(0.92); transition: transform .6s cubic-bezier(.2,.9,.25,1);
+    }
+    #revealOverlay[data-on="1"] .rv-card { transform: scale(1); }
+    .rv-kicker {
+      font-family: var(--mono); font-size: 26px; font-weight: 700; letter-spacing: 0.34em;
+      text-transform: uppercase; color: rgba(255,255,255,0.6);
+    }
+    .rv-name {
+      font-family: var(--disp); font-weight: 700; font-size: 168px; line-height: 0.9;
+      letter-spacing: -0.03em; text-transform: uppercase;
+      word-break: break-word; max-width: 92vw;
+    }
+    .rv-genre {
+      font-family: var(--mono); font-weight: 700; font-size: 38px; letter-spacing: 0.22em;
+      text-transform: uppercase; padding: 12px 30px; border: 3px solid #fff; border-radius: 999px;
+    }
+    .rv-answer {
+      font-family: var(--disp); font-weight: 500; font-size: 48px; line-height: 1.2;
+      color: rgba(255,255,255,0.9); max-width: 80vw; word-break: break-word; margin-top: 8px;
+    }
+
+    /* ---- LOBBY (phase idle): big "scan to join" while waiting for the DJ ---- */
+    #lobby {
+      position: fixed; inset: 0; z-index: 75; display: none;
+      align-items: center; justify-content: center;
+      background: radial-gradient(circle at 50% 38%, #14141f 0%, #07070b 72%);
+    }
+    body.lobby #lobby { display: flex; }
+    body.lobby #joinPanel { display: none; }          /* big QR replaces the corner one */
+    body.lobby #viewport .overlay { opacity: 0; }      /* hide battle readouts pre-show */
+    .lobby-inner { display: flex; flex-direction: column; align-items: center; gap: 22px; text-align: center; }
+    .lobby-kicker {
+      font-family: var(--mono); font-weight: 700; font-size: 22px; letter-spacing: 0.3em;
+      color: rgba(255,255,255,0.6); display: flex; align-items: center; gap: 10px;
+    }
+    .lobby-kicker i { width: 12px; height: 12px; border-radius: 50%; background: #2dd36f; box-shadow: 0 0 12px #2dd36f; }
+    .lobby-title {
+      font-family: var(--disp); font-weight: 700; font-size: 92px; letter-spacing: 0.02em; margin: 0;
+      background: linear-gradient(90deg, var(--cyan), #fff 50%, var(--magenta));
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+    }
+    .lobby-qr { width: 360px; height: 360px; background: #fff; border-radius: 22px; padding: 16px; box-sizing: border-box; box-shadow: 0 0 80px rgba(0,229,255,0.25); }
+    .lobby-qr img { width: 100%; height: 100%; display: block; }
+    .lobby-url { font-family: var(--mono); font-size: 22px; color: rgba(255,255,255,0.8); }
+    .lobby-meta { font-family: var(--mono); font-size: 20px; color: rgba(255,255,255,0.5); }
+    .lobby-meta b { color: var(--cyan); }
+
+    /* ---- audio enable hint (one click anywhere unlocks sound) ---- */
+    #audioGate {
+      position: fixed; bottom: 18px; right: 24px; z-index: 95;
+      font-family: var(--mono); font-size: 15px; letter-spacing: 0.1em; color: rgba(255,255,255,0.82);
+      padding: 10px 20px; border-radius: 999px; background: rgba(8,8,14,0.7);
+      border: 1px solid rgba(255,255,255,0.18); backdrop-filter: blur(6px);
+      transition: opacity .4s ease; pointer-events: none;
+    }
+    #audioGate[data-on="0"] { opacity: 0; }
+
+    /* SCAN TO JOIN — persistent QR so phones on the same WiFi can join */
+    #joinPanel {
+      position: fixed; top: 24px; right: 24px; z-index: 70;
+      display: flex; flex-direction: column; align-items: center; gap: 10px;
+      padding: 18px 18px 14px; border-radius: 20px;
+      background: rgba(8,8,14,0.72); border: 1px solid rgba(255,255,255,0.14);
+      backdrop-filter: blur(8px); box-shadow: 0 0 44px rgba(0,0,0,0.55);
+    }
+    #joinPanel .jp-k {
+      font-family: var(--mono); font-weight: 700; font-size: 17px; letter-spacing: 0.22em;
+      color: var(--cyan); text-transform: uppercase;
+    }
+    #joinPanel .jp-qr { width: 208px; height: 208px; background: #fff; border-radius: 12px; padding: 9px; box-sizing: border-box; }
+    #joinPanel .jp-qr img { width: 100%; height: 100%; display: block; }
+    #joinPanel .jp-url { font-family: var(--mono); font-size: 13px; color: rgba(255,255,255,0.66); }
+  </style>
+</head>
+<body class="lobby">
+  <div id="viewport">
+    <div id="stageRoot">
+      <canvas id="bf"></canvas>
+
+      <div class="overlay">
+        <header class="st-head">
+          <span class="st-live"><i class="st-dot"></i>LIVE — THE SHOW</span>
+          <span class="st-mode">GENRE TUG-OF-WAR</span>
+        </header>
+
+        <div class="readout">
+          <div class="ro-side techno">
+            <span class="ro-name" id="tecName">TECHNO</span>
+            <span class="ro-pct" id="tecPct">50</span>
+          </div>
+          <span class="ro-dash">—</span>
+          <div class="ro-side disco">
+            <span class="ro-pct" id="dscPct">50</span>
+            <span class="ro-name" id="dscName">DISCO</span>
+          </div>
+        </div>
+
+        <div class="round">
+          <span id="roundTxt">ROUND 1 · BEST OF 3</span>
+          <span class="score" id="score"></span>
+        </div>
+
+        <div class="hype">
+          <span class="hype-lbl">CROWD HYPE</span>
+          <div class="hype-bar"><i id="hypeFill"></i></div>
+        </div>
+
+        <div class="sudden-stage" id="sudden" data-on="0"></div>
+      </div>
+
+      <div class="win-flash" id="winFlash" data-on="0">
+        <span class="wf-name" id="wfName"></span>
+        <span class="wf-sub" id="wfSub"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- live layer: ticker + drop reveal (own pointer-events / z-index) -->
+  <div id="revealTicker" data-on="0"></div>
+  <div id="revealOverlay" data-on="0"></div>
+
+  <!-- LOBBY (phase idle): big scan-to-join while waiting for the DJ to start -->
+  <div id="lobby">
+    <div class="lobby-inner">
+      <div class="lobby-kicker"><i></i> LIVE — THE SHOW</div>
+      <h1 class="lobby-title">SCAN TO JOIN</h1>
+      <div class="lobby-qr"><img src="/qr" alt="scan to join" /></div>
+      <div class="lobby-url" id="lobbyUrl">…</div>
+      <div class="lobby-meta"><b id="lobbyCount">0</b> in the room · waiting for the DJ to start</div>
+    </div>
+  </div>
+
+  <!-- SCAN TO JOIN corner panel (visible during the show for latecomers) -->
+  <div id="joinPanel">
+    <span class="jp-k">Scan to join</span>
+    <span class="jp-qr"><img id="joinQr" src="/qr" alt="scan to join" /></span>
+    <span class="jp-url" id="joinUrl">…</span>
+  </div>
+
+  <!-- audio enable hint: one click anywhere unlocks sound (DJ starts from dashboard) -->
+  <div id="audioGate" data-on="1"><span>🔊 click anywhere to enable sound</span></div>
+
+  <!-- transport first; then B's networked seams (exist at runtime) -->
+  <script src="net.js"></script>
+  <script src="net-tug.js"></script>
+  <script src="net-crowd.js"></script>
+  <!-- partner battlefront, now reading the networked window.Tug -->
+  <script src="stage.js"></script>
+  <!-- crossfade engine, then our reveal/audio wiring LAST -->
+  <script src="audioEngine.js"></script>
+  <script src="stage-reveal.js"></script>
+  <script>
+    // label the QR panels with the real LAN join URL (host:port/phone-live.html)
+    fetch('/api/info').then(function (r) { return r.json(); }).then(function (d) {
+      if (!d.joinUrl) return;
+      var u = d.joinUrl.replace(/^https?:\/\//, '');
+      ['joinUrl', 'lobbyUrl'].forEach(function (id) { var el = document.getElementById(id); if (el) el.textContent = u; });
+    }).catch(function () {});
+  </script>
+</body>
+</html>
