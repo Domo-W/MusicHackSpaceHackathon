@@ -70,12 +70,38 @@ function PhoneShell() {
     const toLoading = () => { setLoading(true); setParticipated(true); };
     const offGen = window.Net.on('generating', toLoading);
     const offRR = window.Net.on('round_result', (m) => setReveal(m));
-    const offTug = window.Net.on('tug', (m) => {
-      if (m && m.phase === 'collecting' && m.round > formedRound.current) {
+    const offShow = window.Net.on('show_state', (m) => {
+      if (!m) return;
+      if (m.phase === 'idle') {
+        formedRound.current = 0;
+        setLoading(false);
+        setReveal(null);
+        setStep(0);
+        return;
+      }
+      if (m.phase === 'generating') {
+        setLoading(true);
+        setParticipated(true);
+        if (m.seed) setReveal(m.seed);
+        return;
+      }
+      if (m.phase === 'collecting') {
+        const changedRound = m.round !== formedRound.current;
         formedRound.current = m.round;
-        // Only RESET the walkthrough for a brand-new song round (i.e. we were
-        // waiting on the loading screen). A pre-start cold-start round must NOT
-        // wipe progress the user already made.
+        if (loadingRef.current || changedRound) {
+          setLoading(false);
+          setReveal(null);
+          setStep(0);
+        }
+      }
+    });
+    const offTug = window.Net.on('tug', (m) => {
+      if (m && m.phase === 'idle') {
+        formedRound.current = 0;
+        setLoading(false);
+        setReveal(null);
+      } else if (m && m.phase === 'collecting' && m.round !== formedRound.current) {
+        formedRound.current = m.round;
         if (loadingRef.current) {
           setLoading(false);
           setReveal(null);
@@ -83,7 +109,7 @@ function PhoneShell() {
         }
       }
     });
-    return () => { offJoined(); offGen(); offRR(); offTug(); };
+    return () => { offJoined(); offGen(); offRR(); offShow(); offTug(); };
   }, []);
 
   const next = useCallback(() => setStep((s) => Math.min(s + 1, seq.length - 1)), [seq.length]);

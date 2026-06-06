@@ -76,33 +76,37 @@
     const from = current;
     const to = pending;
     pending = null;
-    to.el.volume = 0;
-    to.startedAt = now();
-    to.el.play().catch((e) => console.warn("play() blocked:", e.message));
-    log(`⤬ crossfading ${from.song.id} → ${to.song.id}`);
+    log(`⤬ transitioning ${from.song.id} → ${to.song.id}`);
 
-    const t0 = performance.now();
-    const durMs = fadeSec * 1000;
-    function step(t) {
-      const k = Math.min(1, (t - t0) / durMs);
-      // equal-power-ish: keep perceived loudness ~constant
-      from.el.volume = Math.max(0, Math.cos((k * Math.PI) / 2));
-      to.el.volume = Math.min(1, Math.sin((k * Math.PI) / 2));
-      if (k < 1) {
-        requestAnimationFrame(step);
-      } else {
-        from.el.pause();
-        from.el.src = "";
-        voices.delete(from.song.id);
-        current = to;
+    const halfMs = Math.max(150, fadeSec * 500);
+    const fadeOutStarted = performance.now();
+    function fadeOut(t) {
+      const k = Math.min(1, (t - fadeOutStarted) / halfMs);
+      from.el.volume = Math.max(0, 1 - k);
+      if (k < 1) return requestAnimationFrame(fadeOut);
+
+      from.el.pause();
+      from.el.src = "";
+      voices.delete(from.song.id);
+      current = to;
+      to.el.volume = 0;
+      to.startedAt = now();
+      to.el.play().catch((e) => console.warn("play() blocked:", e.message));
+      onPlaying(to.song.id);
+      emitState();
+
+      const fadeInStarted = performance.now();
+      function fadeIn(nextT) {
+        const nextK = Math.min(1, (nextT - fadeInStarted) / halfMs);
+        to.el.volume = nextK;
+        if (nextK < 1) return requestAnimationFrame(fadeIn);
         crossing = false;
-        onPlaying(to.song.id);
-        emitState();
         log(`✓ now playing ${to.song.id}`);
         maybeCross(); // in case the next one is already queued
       }
+      requestAnimationFrame(fadeIn);
     }
-    requestAnimationFrame(step);
+    requestAnimationFrame(fadeOut);
   }
 
   const AudioEngine = {
@@ -198,6 +202,7 @@
       playing: !!current && !paused,
       canSkip: !!pending,
       song: current ? current.song : null,
+      nextSong: pending ? pending.song : null,
     });
   }
 

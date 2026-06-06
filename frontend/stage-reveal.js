@@ -15,10 +15,10 @@
   var AudioEngine = window.AudioEngine;
   var Tug = window.Tug;
 
-  // ---- audio engine: crossfade between streaming Suno songs ----
+  // ---- audio engine: transition between streaming Suno songs ----
   AudioEngine.init({
-    fadeSec: 6,
-    minPlaySec: 22, // each song plays >= this, then crossfades as soon as the next is ready
+    fadeSec: 2,
+    minPlaySec: 22, // each song plays >= this, then transitions as soon as the next is ready
     onPlaying: function (id) { Net.send({ type: "playing", id: id }); },
     onState: function (state) {
       Net.send({
@@ -26,6 +26,7 @@
         playing: !!state.playing,
         canSkip: !!state.canSkip,
         song: state.song || undefined,
+        nextSong: state.nextSong || undefined,
       });
     },
   });

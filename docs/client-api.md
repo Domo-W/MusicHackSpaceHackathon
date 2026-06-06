@@ -17,10 +17,13 @@ A song is always playing (or cold-start silent) while the **next** round COLLECT
 2. **buzzer** — winning genre = side ahead at the buzzer. One participant who answered
    is selected at random → `(name, intent, genre)` → broadcast `round_result`.
 3. **generating** — Claude writes name-chant lyrics → Suno → streaming URL (~13–20s).
-4. **playing** — the song crossfades in on the stage; the next collecting round starts.
+4. **playing** — the song transitions in on the stage; the next collecting round starts.
 
 Generate-one-ahead: the next song is produced *during* the current one. The stage owns
-playback + crossfade timing; the backend owns aggregate game state + the pipeline.
+playback + transition timing; the backend owns aggregate game state + the pipeline.
+
+Genre battles rotate automatically each round. A pair pushed from the DJ dashboard
+overrides the next round only; automatic rotation resumes on the following round.
 
 ## window.Net (shared transport — `frontend/net.js`, already written)
 
@@ -42,10 +45,10 @@ Also emits `"__open"` / `"__close"`. Load `net.js` BEFORE the `net-*` seam scrip
 | `{type:"pull", participantId, side:"A"\|"B", impulse}` | phone | tug tap; **batch client-side ~250ms** (sum impulses) |
 | `{type:"playing", id}` | stage | a song became the current track |
 | `{type:"start"}` | dashboard | begin the show |
-| `{type:"config", question?, genreA?, genreB?, collectSeconds?}` | dashboard | set question + the two genres (GenreInfo) |
+| `{type:"config", question?, genreA?, genreB?, collectSeconds?, genreOverride?}` | dashboard | set question/timing or queue a one-round genre override |
 | `{type:"skip"\|"hold"\|"resume"}` | dashboard | overrides |
 | `{type:"playbackControl", action:"play"\|"pause"}` | dashboard | control stage playback |
-| `{type:"playbackState", playing, canSkip, song?}` | stage | report current player state |
+| `{type:"playbackState", playing, canSkip, song?, nextSong?}` | stage | report current player + queue state |
 
 ## Server → clients  (see `ServerMsg` in types.ts)
 
@@ -55,6 +58,7 @@ Also emits `"__open"` / `"__close"`. Load `net.js` BEFORE the `net-*` seam scrip
 | `{type:"tug", phase, round, question, genres:{A,B}, p, driveA, driveB, membersA, membersB, timeRemaining, crowdSize, energy, bpm}` | all | ~15Hz aggregate snapshot |
 | `{type:"round_result", winner, genre, name, answer, roundIndex}` | stage | the drop reveal |
 | `{type:"generating", seed:{name,answer,genre}, roundIndex}` | stage | "crafting <name>'s song…" |
+| `{type:"generation_failed", id, message}` | dashboard | generation failed before audio became playable |
 | `{type:"song_ready", song}` | stage | `song.streamUrl` is playable |
 | `{type:"song_final", id, finalUrl}` | stage | clean CDN m4a |
 | `{type:"song_saved", song}` | dashboard | final audio + metadata saved in the local archive |
@@ -62,7 +66,8 @@ Also emits `"__open"` / `"__close"`. Load `net.js` BEFORE the `net-*` seam scrip
 | `{type:"now_playing", id}` | all | a song is current |
 | `{type:"show_reset"}` | stage | stop and clear stage audio |
 | `{type:"playback_control", action}` | stage | play/pause command from dashboard |
-| `{type:"playback_state", playing, canSkip, song?}` | dashboard | current stage player state |
+| `{type:"playback_state", playing, canSkip, song?, nextSong?}` | dashboard | current stage player + queued track |
+| `{type:"show_state", started, held, phase, round, genres, genreSource, seed?, error?}` | dashboard/phone | authoritative show pipeline state |
 
 ## Local song archive
 

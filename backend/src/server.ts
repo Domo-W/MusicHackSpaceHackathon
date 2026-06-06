@@ -18,6 +18,7 @@ import {
   endVote,
   handlePull,
   handleAnswer,
+  currentShowState,
 } from "./showMachine.js";
 import { join, remove, names } from "./participants.js";
 import { songStore } from "./songStore.js";
@@ -97,6 +98,7 @@ wss.on("connection", (ws) => {
   // Seed the new client (e.g. a freshly-loaded stage) with the current names.
   ws.send(JSON.stringify({ type: "names", names: names() } as ServerMsg));
   ws.send(JSON.stringify(playbackState));
+  ws.send(JSON.stringify({ type: "show_state", ...currentShowState() } as ServerMsg));
 
   ws.on("message", (raw) => {
     let msg: ClientMsg;
@@ -158,6 +160,7 @@ wss.on("connection", (ws) => {
           playing: msg.playing,
           canSkip: msg.canSkip,
           song: msg.song,
+          nextSong: msg.nextSong,
         };
         broadcast(playbackState);
         break;

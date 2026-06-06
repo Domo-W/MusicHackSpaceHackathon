@@ -30,7 +30,7 @@ export const CONFIG = {
 
   // --- show / timing ---
   defaultBpm: Number(process.env.DEFAULT_BPM ?? 120),
-  fadeSeconds: Number(process.env.FADE_SECONDS ?? 6), // crossfade length
+  fadeSeconds: Number(process.env.FADE_SECONDS ?? 2), // fade-out + fade-in transition length
   collectSeconds: Number(process.env.COLLECT_SECONDS ?? 50), // tug round / collection window
   targetSections: 6, // lyric sections → song length lever (calibrate at rehearsal)
 

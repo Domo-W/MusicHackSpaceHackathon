@@ -68,10 +68,16 @@
         type: "config",
         genreA: genreInfo("A", payload.sideA),
         genreB: genreInfo("B", payload.sideB),
+        genreOverride: true,
       };
       if (collectSeconds != null) msg.collectSeconds = collectSeconds;
       Net.send(msg);
-      status("config sent · " + msg.genreA.name + " vs " + msg.genreB.name);
+      if (!showState.started) {
+        Net.send({ type: "start" });
+        status("show started · " + msg.genreA.name + " vs " + msg.genreB.name);
+      } else {
+        status("next round genres · " + msg.genreA.name + " vs " + msg.genreB.name);
+      }
     } else if (channel === "vibe-cards" && Array.isArray(payload)) {
       // No dedicated "question" field on the dashboard. Best-effort: use the
       // first non-empty vibe card as the round question. (Flagged for lead.)
@@ -105,9 +111,27 @@
   var playerLabel = null;
   var playerMeta = null;
   var playerPulse = null;
+  var flowLabel = null;
+  var flowMeta = null;
   var actionsMenu = null;
+  var startShowBtn = null;
+  var endVoteBtn = null;
+  var regenerateBtn = null;
+  var holdBtn = null;
+  var resumeBtn = null;
   var latestSavedSong = null;
-  var playbackState = { playing: false, canSkip: false, song: null };
+  var playbackState = { playing: false, canSkip: false, song: null, nextSong: null };
+  var showState = {
+    started: false,
+    held: false,
+    phase: "idle",
+    round: 0,
+    genres: null,
+    genreSource: "auto",
+    seed: null,
+    error: "",
+  };
+  var lastTug = null;
 
   function status(text) {
     if (statusEl) statusEl.textContent = text;
@@ -149,6 +173,11 @@
       "border-color:#F4F4F8!important;font:700 10px 'Space Grotesk',system-ui,sans-serif;letter-spacing:.08em}",
       ".dnp-skip{height:38px;border-radius:999px;padding:0 16px;font:600 10px 'Space Grotesk',system-ui,sans-serif;",
       "letter-spacing:.1em;text-transform:uppercase}.dnp-right{position:relative;display:flex;align-items:center;justify-content:flex-end;gap:9px;min-width:0}",
+      ".dnp-flow{min-width:150px;max-width:260px;padding-right:10px;text-align:right}.dnp-flow-label{overflow:hidden;text-overflow:ellipsis;",
+      "white-space:nowrap;font:700 10px 'Space Grotesk',system-ui,sans-serif;letter-spacing:.04em;color:#F4F4F8}",
+      ".dnp-flow-meta{margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:8px;",
+      "letter-spacing:.1em;color:#8C8C9C;text-transform:uppercase}.dnp-flow.is-error .dnp-flow-label{color:#FF7A9F}",
+      ".dnp-flow.is-generating .dnp-flow-label{color:#FFD23F}.dnp-flow.is-ready .dnp-flow-label{color:#2DD36F}",
       ".dnp-utility{height:36px;border-radius:8px;padding:0 12px;font:600 10px 'Space Grotesk',system-ui,sans-serif;",
       "letter-spacing:.08em;text-transform:uppercase}.dnp-actions-toggle{color:#0A0A0F;background:#00E5FF;border-color:#00E5FF}",
       ".dnp-actions{position:absolute;right:0;bottom:52px;width:310px;padding:14px;background:#101018;",
@@ -159,6 +188,7 @@
       "border:1px solid rgba(255,255,255,.12);background:#191923;color:#F4F4F8;font:600 10px 'Space Grotesk',system-ui,sans-serif;",
       "letter-spacing:.08em;text-transform:uppercase}.dnp-action:hover{border-color:rgba(0,229,255,.5);background:#20202C}",
       ".dnp-action-primary{background:#00E5FF;color:#0A0A0F;border-color:#00E5FF}.dnp-action-danger{color:#FF7A9F}",
+      ".dnp-action:disabled{opacity:.3;cursor:not-allowed}.dnp-action:disabled:hover{border-color:rgba(255,255,255,.12);background:#191923}",
       ".dnp-timing{display:flex;align-items:center;justify-content:space-between;margin-top:10px;padding-top:10px;",
       "border-top:1px solid rgba(255,255,255,.1);font-size:9px;letter-spacing:.12em;color:#8C8C9C;text-transform:uppercase}",
       ".dnp-timing input{width:64px;height:30px;padding:0 8px;background:#15151F;border:1px solid rgba(255,255,255,.18);",
@@ -166,7 +196,7 @@
       "#dashNetStatus{position:absolute;right:22px;bottom:5px;max-width:360px;overflow:hidden;text-overflow:ellipsis;",
       "white-space:nowrap;font-size:8px;letter-spacing:.08em;color:#8C8C9C;text-transform:uppercase}",
       "@media(max-width:900px){#dashNetBar{grid-template-columns:minmax(180px,1fr) auto auto;gap:12px;padding-inline:12px}",
-      ".dnp-download{display:none}.dnp-actions{right:0}.dnp-art{width:44px;height:44px}.dnp-meta{display:none}}"
+      ".dnp-download,.dnp-flow{display:none}.dnp-actions{right:0}.dnp-art{width:44px;height:44px}.dnp-meta{display:none}}"
     ].join("");
     document.head.appendChild(style);
   }
@@ -222,6 +252,18 @@
 
     var right = document.createElement("div");
     right.className = "dnp-right";
+    var flow = document.createElement("div");
+    flow.className = "dnp-flow";
+    flowLabel = document.createElement("div");
+    flowLabel.className = "dnp-flow-label";
+    flowLabel.textContent = "Show is ready";
+    flowMeta = document.createElement("div");
+    flowMeta.className = "dnp-flow-meta";
+    flowMeta.textContent = "Choose genres and start the show";
+    flow.appendChild(flowLabel);
+    flow.appendChild(flowMeta);
+    right.appendChild(flow);
+
     downloadBtn = makeBtn("Download", "dnp-utility dnp-download", function () {
       if (!latestSavedSong) return;
       var a = document.createElement("a");
@@ -234,6 +276,13 @@
     });
     downloadBtn.disabled = true;
     right.appendChild(downloadBtn);
+
+    var openLiveBtn = makeBtn("Open Live", "dnp-utility", function () {
+      window.open("/stage-live.html", "_blank", "noopener");
+      status("Live screen opened in a new tab");
+    });
+    openLiveBtn.title = "Open the projector Live screen in a new tab";
+    right.appendChild(openLiveBtn);
 
     var actionsToggle = makeBtn("Show Actions", "dnp-utility dnp-actions-toggle", function () {
       actionsMenu.classList.toggle("is-open");
@@ -255,11 +304,16 @@
     actionsMenu.appendChild(actionsHead);
     var actionGrid = document.createElement("div");
     actionGrid.className = "dnp-action-grid";
-    actionGrid.appendChild(makeBtn("Start Show", "dnp-action dnp-action-primary", function () { Net.send({ type: "start" }); status("show started"); }));
-    actionGrid.appendChild(makeBtn("End Vote", "dnp-action", function () { Net.send({ type: "endVote" }); status("vote ended"); }));
-    actionGrid.appendChild(makeBtn("Regenerate", "dnp-action", function () { Net.send({ type: "skip" }); status("regenerating queued song"); }));
-    actionGrid.appendChild(makeBtn("Hold Flow", "dnp-action", function () { Net.send({ type: "hold" }); status("show flow held"); }));
-    actionGrid.appendChild(makeBtn("Resume Flow", "dnp-action", function () { Net.send({ type: "resume" }); status("show flow resumed"); }));
+    startShowBtn = makeBtn("Start Show", "dnp-action dnp-action-primary", function () { Net.send({ type: "start" }); status("show started"); });
+    endVoteBtn = makeBtn("End Vote", "dnp-action", function () { Net.send({ type: "endVote" }); status("ending active vote"); });
+    regenerateBtn = makeBtn("Regenerate", "dnp-action", function () { Net.send({ type: "skip" }); status("regenerating next song"); });
+    holdBtn = makeBtn("Hold Flow", "dnp-action", function () { Net.send({ type: "hold" }); status("show flow held"); });
+    resumeBtn = makeBtn("Resume Flow", "dnp-action", function () { Net.send({ type: "resume" }); status("show flow resumed"); });
+    actionGrid.appendChild(startShowBtn);
+    actionGrid.appendChild(endVoteBtn);
+    actionGrid.appendChild(regenerateBtn);
+    actionGrid.appendChild(holdBtn);
+    actionGrid.appendChild(resumeBtn);
     actionGrid.appendChild(makeBtn("Reset Show", "dnp-action dnp-action-danger", function () { Net.send({ type: "reset" }); status("show reset to lobby"); }));
     actionsMenu.appendChild(actionGrid);
 
@@ -291,6 +345,8 @@
     bar.appendChild(statusEl);
 
     document.body.appendChild(bar);
+    updateFlow();
+    updateActions();
     document.addEventListener("click", function (event) {
       if (!actionsMenu.contains(event.target) && event.target !== actionsToggle) {
         actionsMenu.classList.remove("is-open");
@@ -315,9 +371,15 @@
     Net.on("__close", function () { status("disconnected — reconnecting…"); });
 
     Net.on("tug", function (m) {
+      lastTug = m || null;
       var t = (m && typeof m.timeRemaining === "number") ? m.timeRemaining.toFixed(1) + "s" : "–";
       status("phase " + (m && m.phase) + " · round " + (m && m.round) + " · " + t +
         " · crowd " + (m && m.crowdSize));
+      updateFlow();
+    });
+
+    Net.on("round_result", function (m) {
+      if (m) status("round " + m.roundIndex + " winner · " + m.genre + " · " + m.name);
     });
 
     Net.on("generating", function (m) {
@@ -327,7 +389,11 @@
 
     Net.on("song_ready", function (m) {
       var s = m && m.song;
-      status("now playing: " + (s ? (s.title + " (" + s.name + ")") : "song"));
+      status("track ready: " + (s ? (s.title + " (" + s.name + ")") : "song"));
+    });
+
+    Net.on("generation_failed", function (m) {
+      status("generation failed · " + ((m && m.message) || "try regenerate"));
     });
 
     Net.on("song_saved", function (m) {
@@ -344,8 +410,24 @@
         playing: !!(m && m.playing),
         canSkip: !!(m && m.canSkip),
         song: m && m.song ? m.song : null,
+        nextSong: m && m.nextSong ? m.nextSong : null,
       };
       updatePlayer();
+    });
+
+    Net.on("show_state", function (m) {
+      showState = {
+        started: !!(m && m.started),
+        held: !!(m && m.held),
+        phase: (m && m.phase) || "idle",
+        round: (m && m.round) || 0,
+        genres: m && m.genres ? m.genres : null,
+        genreSource: (m && m.genreSource) || "auto",
+        seed: m && m.seed ? m.seed : null,
+        error: (m && m.error) || "",
+      };
+      updateFlow();
+      updateActions();
     });
   }
 
@@ -374,6 +456,74 @@
         : "Waiting for the first generated track";
     }
     if (playerPulse) playerPulse.classList.toggle("is-playing", playbackState.playing);
+    updateFlow();
+    updateActions();
+  }
+
+  function updateFlow() {
+    if (!flowLabel || !flowMeta) return;
+    var flow = flowLabel.parentNode;
+    flow.classList.remove("is-error", "is-generating", "is-ready");
+    if (showState.error) {
+      flow.classList.add("is-error");
+      flowLabel.textContent = "Generation failed";
+      flowMeta.textContent = "Open Show Actions and regenerate";
+      flowLabel.title = showState.error;
+      return;
+    }
+    if (showState.phase === "generating") {
+      flow.classList.add("is-generating");
+      flowLabel.textContent = showState.seed
+        ? "Generating for " + showState.seed.name
+        : "Generating next track";
+      flowMeta.textContent = showState.seed
+        ? showState.seed.genre + " · round " + showState.round
+        : "Round " + showState.round;
+      return;
+    }
+    if (playbackState.nextSong) {
+      flow.classList.add("is-ready");
+      flowLabel.textContent = "Next ready · " + playbackState.nextSong.title;
+      flowMeta.textContent = playbackState.nextSong.genre + " · for " + playbackState.nextSong.name;
+      return;
+    }
+    if (showState.phase === "collecting") {
+      var seconds = lastTug && typeof lastTug.timeRemaining === "number"
+        ? Math.ceil(lastTug.timeRemaining) + "s remaining"
+        : "Voting live";
+      flowLabel.textContent = "Round " + showState.round + " · voting";
+      var pair = showState.genres
+        ? showState.genres.A.name + " vs " + showState.genres.B.name
+        : "";
+      var source = showState.genreSource === "dj" ? "DJ override" : "Auto rotation";
+      flowMeta.textContent = (pair ? pair + " · " : "") + source + " · " + seconds;
+      return;
+    }
+    if (showState.started) {
+      flowLabel.textContent = playbackState.song ? "Preparing the next round" : "Waiting for first track";
+      flowMeta.textContent = showState.held ? "Show flow held" : "Generation pipeline active";
+      return;
+    }
+    flowLabel.textContent = "Show is ready";
+    flowMeta.textContent = "Choose genres and start the show";
+  }
+
+  function updateActions() {
+    if (!startShowBtn) return;
+    startShowBtn.disabled = showState.started;
+    startShowBtn.title = showState.started ? "The show is already running" : "Begin round 1 voting";
+    endVoteBtn.disabled = showState.phase !== "collecting";
+    endVoteBtn.title = endVoteBtn.disabled ? "Available while a vote is active" : "Resolve this vote and generate the next track";
+    regenerateBtn.disabled = !(showState.phase === "generating" || showState.error || playbackState.nextSong);
+    regenerateBtn.title = regenerateBtn.disabled ? "No generating or queued track to replace" : "Discard and regenerate the next track";
+    holdBtn.disabled = !showState.started || showState.held;
+    resumeBtn.disabled = !showState.held;
+    var genreButton = document.getElementById("genreRoundButton");
+    if (genreButton) {
+      genreButton.textContent = showState.started
+        ? "Override next round"
+        : "Start show with selected genres";
+    }
   }
 
   function setLatestSaved(song) {
@@ -394,30 +544,9 @@
       .catch(function (err) { console.warn("[dash-net] could not load saved songs:", err.message); });
   }
 
-  // Auto-sync the DJ's selected genres to the backend so the phone vote ALWAYS
-  // reflects the dashboard — no need to remember to hit "push". Polls the
-  // partner's window.DJConsoleState (updated live as they pick A/B genres).
-  function autoSyncGenres() {
-    var last = "";
-    // Re-push the current genres whenever we (re)connect — e.g. after a server
-    // restart the backend reverts to defaults, so force a resend.
-    if (Net && Net.on) Net.on("__open", function () { last = ""; });
-    setInterval(function () {
-      var s = window.DJConsoleState;
-      if (!s || s.sideA == null || s.sideB == null) return;
-      var key = String(s.sideA) + "|" + String(s.sideB);
-      if (key === last) return;
-      last = key;
-      var msg = { type: "config", genreA: genreInfo("A", s.sideA), genreB: genreInfo("B", s.sideB) };
-      Net.send(msg);
-      status("genres → " + msg.genreA.name + " vs " + msg.genreB.name);
-    }, 700);
-  }
-
   function init() {
     buildStrip();
     wireStatus();
-    autoSyncGenres();
     loadSavedSongs();
     status("ready" + (Net.ready() ? " · connected" : ""));
   }
