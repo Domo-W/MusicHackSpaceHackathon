@@ -1,4 +1,5 @@
 import "dotenv/config";
+import path from "node:path";
 
 function required(name: string): string {
   const v = process.env[name];
@@ -28,10 +29,15 @@ export const CONFIG = {
   agentModel: process.env.AGENT_MODEL || "claude-opus-4-8",
 
   // --- show / timing ---
-  fixedBpm: 120,
+  defaultBpm: Number(process.env.DEFAULT_BPM ?? 120),
   fadeSeconds: Number(process.env.FADE_SECONDS ?? 6), // crossfade length
   collectSeconds: Number(process.env.COLLECT_SECONDS ?? 50), // tug round / collection window
   targetSections: 6, // lyric sections → song length lever (calibrate at rehearsal)
+
+  // --- local song archive ---
+  // This is the current SongStore implementation. It can later be replaced by
+  // a Supabase-backed store without changing the generation pipeline.
+  songsDir: path.resolve(process.env.SONGS_DIR || "data/songs"),
 } as const;
 
 export type Config = typeof CONFIG;

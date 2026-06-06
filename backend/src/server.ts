@@ -15,10 +15,12 @@ import {
   hold,
   resume,
   reset,
+  endVote,
   handlePull,
   handleAnswer,
 } from "./showMachine.js";
 import { join, remove, names } from "./participants.js";
+import { songStore } from "./songStore.js";
 import type { ClientMsg, ServerMsg } from "./types.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -40,6 +42,27 @@ const app = express();
 app.get("/health", (_req, res) => res.json({ ok: true }));
 // Join info + a QR for it, so the stage can show "scan to join" on the same LAN.
 app.get("/api/info", (_req, res) => res.json({ joinUrl: JOIN_URL, lanIp: lanIp(), port: CONFIG.port }));
+app.get("/api/songs", async (_req, res) => {
+  try {
+    res.json({ songs: await songStore.list() });
+  } catch (err) {
+    console.error("[songs] list failed:", (err as Error).message);
+    res.status(500).json({ error: "Could not list locally saved songs." });
+  }
+});
+app.get("/api/songs/:id/download", async (req, res) => {
+  try {
+    const saved = await songStore.fileFor(req.params.id);
+    if (!saved) {
+      res.status(404).json({ error: "Song not found." });
+      return;
+    }
+    res.download(saved.filePath, saved.song.fileName);
+  } catch (err) {
+    console.error("[songs] download failed:", (err as Error).message);
+    res.status(500).json({ error: "Could not download the saved song." });
+  }
+});
 app.get("/qr", async (_req, res) => {
   try {
     const svg = await QRCode.toString(JOIN_URL, { type: "svg", margin: 1, color: { dark: "#0A0A0F", light: "#FFFFFF" } });
@@ -113,6 +136,12 @@ wss.on("connection", (ws) => {
         break;
       case "reset":
         reset();
+        break;
+      case "endVote":
+        endVote();
+        break;
+      case "forceNext":
+        broadcast({ type: "force_next" });
         break;
       default:
         break;

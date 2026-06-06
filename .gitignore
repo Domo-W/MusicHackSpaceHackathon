@@ -17,5 +17,7 @@ build/
 
 # local audio/test artifacts
 tmp/
+data/songs/
 *.mp3
 *.wav
+*.m4a

@@ -9,10 +9,11 @@
 (function () {
   "use strict";
 
-  // Each song plays for ~segmentSec, then crossfades to the next (if ready; else
-  // loops until it is). Fixed segment length avoids depending on Suno's highly
-  // variable `complete` time / unreliable stream duration — robust pacing.
-  let segmentSec = 70;
+  // A song plays at least `minPlaySec`, then crossfades to the next AS SOON AS it
+  // is ready — so the loop stays tight (brief loading, then the next song plays and
+  // everyone returns to voting). If the next isn't ready yet, the current keeps
+  // looping (never dead air) and crosses the moment it arrives.
+  let minPlaySec = 22;
   let fadeSec = 6;
   let onPlaying = () => {};
 
@@ -45,16 +46,24 @@
     log(`▶ playing ${voice.song.id} — ${voice.song.name} · ${voice.song.genre}`);
   }
 
-  // Once we have both current + pending, schedule the crossfade for
-  // (segmentSec - fade) into the current song. If pending arrives late (current
-  // already looping past the segment), wait is 0 → crossfade immediately, no gap.
+  // Crossfade as soon as the next song is ready, after the current has played a
+  // short minimum. (Called when `pending` arrives.) If pending shows up after the
+  // minimum, wait is 0 → crossfade immediately, no long gap.
   function maybeCross() {
     if (!current || !pending || crossing) return;
     const elapsed = now() - current.startedAt;
-    const wait = Math.max(0, segmentSec - fadeSec - elapsed);
+    const wait = Math.max(0, minPlaySec - elapsed);
     if (crossTimer) clearTimeout(crossTimer);
     crossTimer = setTimeout(crossfade, wait * 1000);
-    log(`⤬ crossfade ${current.song.id}→next scheduled in ${wait.toFixed(1)}s`);
+    log(`⤬ crossfade ${current.song.id}→next in ${wait.toFixed(1)}s`);
+  }
+
+  // Force the crossfade now (dashboard "Next song" / testing).
+  function forceCross() {
+    if (current && pending && !crossing) {
+      if (crossTimer) clearTimeout(crossTimer);
+      crossfade();
+    }
   }
 
   function crossfade() {
@@ -94,8 +103,38 @@
   const AudioEngine = {
     init(opts) {
       fadeSec = opts.fadeSec ?? fadeSec;
-      segmentSec = opts.segmentSec ?? segmentSec;
+      minPlaySec = opts.minPlaySec ?? opts.segmentSec ?? minPlaySec;
       onPlaying = opts.onPlaying ?? onPlaying;
+    },
+
+    // Force the next song in now (testing / dashboard "Next song").
+    forceNext() { forceCross(); },
+
+    // Remove a skipped song if it is queued. Never stop the current song here.
+    cancel(id) {
+      if (!pending || pending.song.id !== id) return;
+      if (crossTimer) clearTimeout(crossTimer);
+      crossTimer = null;
+      pending.el.pause();
+      pending.el.src = "";
+      voices.delete(id);
+      pending = null;
+      log(`× cancelled queued ${id}`);
+    },
+
+    // Full show reset: stop playback and clear every buffered voice.
+    reset() {
+      if (crossTimer) clearTimeout(crossTimer);
+      crossTimer = null;
+      voices.forEach((voice) => {
+        voice.el.pause();
+        voice.el.src = "";
+      });
+      voices.clear();
+      current = null;
+      pending = null;
+      crossing = false;
+      log("■ audio reset");
     },
 
     // A song's streaming URL is ready to play.

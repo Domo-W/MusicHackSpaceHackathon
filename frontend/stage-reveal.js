@@ -18,12 +18,15 @@
   // ---- audio engine: crossfade between streaming Suno songs ----
   AudioEngine.init({
     fadeSec: 6,
-    segmentSec: 70,
+    minPlaySec: 22, // each song plays >= this, then crossfades as soon as the next is ready
     onPlaying: function (id) { Net.send({ type: "playing", id: id }); },
   });
 
   Net.on("song_ready", function (m) { AudioEngine.ready(m.song); });
   Net.on("song_final", function (m) { AudioEngine.final(m.id, m.finalUrl); });
+  Net.on("song_cancelled", function (m) { if (AudioEngine.cancel) AudioEngine.cancel(m.id); });
+  Net.on("show_reset", function () { if (AudioEngine.reset) AudioEngine.reset(); });
+  Net.on("force_next", function () { if (AudioEngine.forceNext) AudioEngine.forceNext(); });
 
   // ---- DOM handles (created lazily so order-of-load is irrelevant) ----
   var ticker = document.getElementById("revealTicker");
@@ -172,13 +175,7 @@
   }
   document.addEventListener("click", unlockAudio);
 
-  // ---- hide the mouse on the projector when idle (reappears on movement) ----
-  var cursorTimer = null;
-  function pokeCursor() {
-    document.body.style.cursor = "";
-    if (cursorTimer) clearTimeout(cursorTimer);
-    cursorTimer = setTimeout(function () { document.body.style.cursor = "none"; }, 2500);
-  }
-  document.addEventListener("mousemove", pokeCursor);
-  pokeCursor();
+  // The cursor does nothing useful on the projector — hide it entirely.
+  document.documentElement.style.cursor = "none";
+  document.body.style.cursor = "none";
 })();

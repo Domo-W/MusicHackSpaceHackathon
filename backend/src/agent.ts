@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { CONFIG } from "./config.js";
+import { genreBpm } from "./tempo.js";
 
 const client = new Anthropic({ apiKey: CONFIG.anthropicApiKey });
 
@@ -12,7 +13,7 @@ export interface SongSeed {
 export interface SongPrompt {
   title: string;
   lyrics: string; // [Verse]/[Chorus]/... with a name shout-out
-  style: string; // genre + fixed BPM + production descriptors (Suno `style`)
+  style: string; // genre + genre-aware BPM + production descriptors (Suno `style`)
 }
 
 // JSON-schema-constrained output (supported on opus-4-8 / sonnet-4-6 / haiku-4-5).
@@ -36,74 +37,55 @@ const SCHEMA = {
   required: ["title", "lyrics", "style"],
 } as const;
 
-const FORMAT_EXAMPLE = `[Intro]
-Melissa
+const STRUCTURE_TEMPLATE = `[Intro]
+<name chant>
 
 [Chorus]
-I'm drunk and outside
-Hey
-Hey
-Hey
-I'm drunk and outside
+<short hook derived from the person's answer>
 
 [Verse 1]
-Good vibe, good energy
-We all are outside (outside)
-Good vibe, good energy
-We outside tonight
+<specific imagery and action from the answer>
 
 [Chorus]
-Melissa
-I'm drunk and outside
-Hey
+<repeat the same custom hook>
 
 [Verse 2]
-Turn up, turn up the place (Hey)
-Everybody matching replays
-Turn up turn up the bass
-We outside 'til morning day
-Melissa, come toss me the rum
-Melissa, we outside for fun
-Melissa, ah, ah, ah
+<new intent-specific lines with direct name call-outs>
 
 [Chorus]
-I'm drunk and outside
-Hey
-Oh
-Hey
-Melissa, come toss me the rum
-Melissa, we outside for fun
-Melissa, ah, ah, ah
-I'm jumping outside
+<repeat the same custom hook>
 
 [Outro]
-Hey, oh
-Hey, Melissa`;
+<name chant and one final hook fragment>`;
 
-function systemPrompt(): string {
+function systemPrompt(seed: SongSeed, bpm: number): string {
   return [
     "You are the live lyricist for 'Between Sets', a party where the crowd's answers become AI songs in real time.",
     "Turn ONE person's name + their 'I want to…' intent + a winning genre into a chantable, crowd-igniting party song.",
     "",
-    "FORMAT — follow this structure and style closely (this is the target):",
-    FORMAT_EXAMPLE,
+    "FORMAT — replace every placeholder with original lyrics:",
+    STRUCTURE_TEMPLATE,
     "",
     "Rules:",
-    `- THE PERSON'S NAME IS MANDATORY and central: it IS the [Intro], it lands in the [Chorus], and it is chanted REPEATEDLY inside the verses as direct call-outs (e.g. "<Name>, come toss me the rum / <Name>, we outside for fun / <Name>, ah ah ah"). Never omit, abbreviate, or anonymize it — even when transforming an unsafe intent.`,
-    "- Build the [Chorus] as a SHORT, super-repetitive hook drawn straight from their intent (like \"I'm drunk and outside\"). Repeat it; keep words simple and shoutable.",
-    "- Pepper in crowd ad-libs and call-and-response: \"Hey\", \"Oh\", \"(outside)\", \"ah ah ah\".",
+    "- THE PERSON'S NAME IS MANDATORY and central: it is the [Intro], lands in the [Chorus], and is chanted repeatedly inside the verses as a direct call-out. Never omit, abbreviate, or anonymize it, even when transforming an unsafe intent.",
+    "- Build the [Chorus] as a short, super-repetitive hook drawn directly from their answer. Keep it simple and shoutable.",
+    "- Add sparse crowd ad-libs and call-and-response, but vary them from song to song.",
+    "- Every song must use fresh, intent-specific wording. Do not add stock positivity or party slogans that were not present in the person's answer.",
+    "- Repeat the custom chorus hook on purpose, but do not repeat generic verse lines just to fill space.",
     "- Use these exact section tags: [Intro], [Chorus], [Verse 1], [Verse 2], [Outro] (repeat [Chorus] between verses). Aim for ~6–8 sections so the song runs long enough.",
-    `- The 'style' field MUST start with the genre, then include "${CONFIG.fixedBpm} BPM, 4/4, steady danceable tempo" plus a few production descriptors, so consecutive songs beat-match for crossfading.`,
+    `- The 'style' field MUST start with "${seed.genre}, ${bpm} BPM, 4/4" followed by genre-appropriate production descriptors.`,
     "- Keep it crowd-friendly: no slurs, hate, explicit sexual content, or targeted insults. If an intent is unsafe, transform it into something fun and inclusive (still keep the name).",
     "Return ONLY the structured fields (title, lyrics, style).",
   ].join("\n");
 }
 
 function userPrompt(seed: SongSeed): string {
+  const bpm = genreBpm(seed.genre);
   return [
     `Name: ${seed.name}`,
     `Their answer: ${seed.answer}`,
     `Winning genre: ${seed.genre}`,
+    `Target tempo: ${bpm} BPM`,
     `Target sections: ${CONFIG.targetSections}`,
   ].join("\n");
 }
@@ -118,6 +100,7 @@ function nameAppears(lyrics: string, name: string): boolean {
 /** Deterministic fallback if the LLM call fails or is too slow. */
 export function templatePrompt(seed: SongSeed): SongPrompt {
   const name = seed.name.trim() || "you";
+  const bpm = genreBpm(seed.genre);
   const chorus = `[Chorus]\n${name}, this one's for you\n${seed.answer}\nTurn it up, we're breaking through`;
   const sections = [
     `[Verse]\nSomebody said it, ${name} in the crowd`,
@@ -131,17 +114,28 @@ export function templatePrompt(seed: SongSeed): SongPrompt {
   return {
     title: `${name}'s ${seed.genre} Anthem`,
     lyrics: sections.join("\n"),
-    style: `${seed.genre}, ${CONFIG.fixedBpm} BPM, 4/4, steady danceable tempo, punchy drums, bright`,
+    style: `${seed.genre}, ${bpm} BPM, 4/4, genre-authentic groove, punchy drums, bright`,
   };
+}
+
+function normalizedStyle(style: string, genre: string, bpm: number): string {
+  const escapedGenre = genre.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const descriptors = style
+    .replace(new RegExp(`^\\s*${escapedGenre}\\s*,?\\s*`, "i"), "")
+    .replace(/\b\d{2,3}\s*BPM\b/gi, "")
+    .replace(/\b4\/4\b/gi, "")
+    .replace(/^[\s,]+|[\s,]+$/g, "");
+  return [genre, `${bpm} BPM`, "4/4", descriptors].filter(Boolean).join(", ");
 }
 
 /** Craft a Suno prompt from the seed. Falls back to a template on any failure. */
 export async function craftSongPrompt(seed: SongSeed): Promise<SongPrompt> {
+  const bpm = genreBpm(seed.genre);
   try {
     const res = await client.messages.create({
       model: CONFIG.agentModel,
       max_tokens: 2048,
-      system: systemPrompt(),
+      system: systemPrompt(seed, bpm),
       // output_config.format constrains the response to our JSON schema.
       output_config: {
         format: { type: "json_schema", schema: SCHEMA },
@@ -159,6 +153,7 @@ export async function craftSongPrompt(seed: SongSeed): Promise<SongPrompt> {
     if (!nameAppears(parsed.lyrics, seed.name)) {
       throw new Error(`agent: name "${seed.name}" missing from lyrics`);
     }
+    parsed.style = normalizedStyle(parsed.style, seed.genre, bpm);
     return parsed;
   } catch (err) {
     console.error("agent: falling back to template —", (err as Error).message);

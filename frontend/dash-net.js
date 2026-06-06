@@ -100,6 +100,8 @@
   // Injected control strip + live status. All text via textContent.
   // ============================================================
   var statusEl = null;
+  var downloadBtn = null;
+  var latestSavedSong = null;
 
   function status(text) {
     if (statusEl) statusEl.textContent = "● " + text;
@@ -137,6 +139,21 @@
     bar.appendChild(makeBtn("Hold", "#B65CFF", function () { Net.send({ type: "hold" }); status("hold sent"); }));
     bar.appendChild(makeBtn("Resume", "#FF1A8C", function () { Net.send({ type: "resume" }); status("resume sent"); }));
     bar.appendChild(makeBtn("Reset", "#8a8a99", function () { Net.send({ type: "reset" }); status("reset → blank lobby"); }));
+    bar.appendChild(makeBtn("End Vote", "#2DD36F", function () { Net.send({ type: "endVote" }); status("end vote → resolving round"); }));
+    bar.appendChild(makeBtn("Next Song", "#FFD23F", function () { Net.send({ type: "forceNext" }); status("force next song"); }));
+    downloadBtn = makeBtn("Download Latest", "#F4F4F8", function () {
+      if (!latestSavedSong) return;
+      var a = document.createElement("a");
+      a.href = latestSavedSong.downloadUrl;
+      a.download = latestSavedSong.fileName || "";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      status("downloading " + latestSavedSong.title);
+    });
+    downloadBtn.disabled = true;
+    downloadBtn.style.opacity = ".45";
+    bar.appendChild(downloadBtn);
 
     // collectSeconds input (fills the config gap — dashboard has no such field)
     var secWrap = document.createElement("label");
@@ -210,9 +227,33 @@
       status("now playing: " + (s ? (s.title + " (" + s.name + ")") : "song"));
     });
 
+    Net.on("song_saved", function (m) {
+      setLatestSaved(m && m.song);
+      if (m && m.song) status("saved locally · " + m.song.title);
+    });
+
     Net.on("now_playing", function (m) {
       status("now playing id " + (m && m.id));
     });
+  }
+
+  function setLatestSaved(song) {
+    if (!song) return;
+    latestSavedSong = song;
+    if (downloadBtn) {
+      downloadBtn.disabled = false;
+      downloadBtn.style.opacity = "1";
+      downloadBtn.title = song.title + " · " + song.genre + " · " + song.bpm + " BPM";
+    }
+  }
+
+  function loadSavedSongs() {
+    fetch("/api/songs")
+      .then(function (res) { return res.ok ? res.json() : Promise.reject(new Error("HTTP " + res.status)); })
+      .then(function (data) {
+        if (data && Array.isArray(data.songs) && data.songs.length) setLatestSaved(data.songs[0]);
+      })
+      .catch(function (err) { console.warn("[dash-net] could not load saved songs:", err.message); });
   }
 
   // Auto-sync the DJ's selected genres to the backend so the phone vote ALWAYS
@@ -220,6 +261,9 @@
   // partner's window.DJConsoleState (updated live as they pick A/B genres).
   function autoSyncGenres() {
     var last = "";
+    // Re-push the current genres whenever we (re)connect — e.g. after a server
+    // restart the backend reverts to defaults, so force a resend.
+    if (Net && Net.on) Net.on("__open", function () { last = ""; });
     setInterval(function () {
       var s = window.DJConsoleState;
       if (!s || s.sideA == null || s.sideB == null) return;
@@ -236,6 +280,7 @@
     buildStrip();
     wireStatus();
     autoSyncGenres();
+    loadSavedSongs();
     status("ready" + (Net.ready() ? " · connected" : ""));
   }
 

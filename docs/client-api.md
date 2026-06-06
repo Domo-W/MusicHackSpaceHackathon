@@ -4,7 +4,8 @@ Single source of truth for how the **phone**, **stage/projector**, and **DJ dash
 talk to our Node backend. Wire types live in `backend/src/types.ts` — this doc is the
 human-readable version + the frontend seam mapping + the build ownership map.
 
-Everything is JSON over **one WebSocket** (`ws(s)://<host>`). No REST. No build step —
+Live state is JSON over **one WebSocket** (`ws(s)://<host>`). The local song archive
+uses the small REST surface documented below. No build step —
 plain `window.*` globals + inline Babel, matching the partner's prototype.
 
 ## Gameplay model
@@ -54,7 +55,20 @@ Also emits `"__open"` / `"__close"`. Load `net.js` BEFORE the `net-*` seam scrip
 | `{type:"generating", seed:{name,answer,genre}, roundIndex}` | stage | "crafting <name>'s song…" |
 | `{type:"song_ready", song}` | stage | `song.streamUrl` is playable |
 | `{type:"song_final", id, finalUrl}` | stage | clean CDN m4a |
+| `{type:"song_saved", song}` | dashboard | final audio + metadata saved in the local archive |
+| `{type:"song_cancelled", id}` | stage | discard a skipped queued song |
 | `{type:"now_playing", id}` | all | a song is current |
+| `{type:"show_reset"}` | stage | stop and clear stage audio |
+
+## Local song archive
+
+Completed songs are downloaded into `SONGS_DIR` (default `data/songs/`, gitignored).
+This is the current storage boundary until a hosted store such as Supabase is added.
+
+| endpoint | meaning |
+|---|---|
+| `GET /api/songs` | newest-first saved-song metadata |
+| `GET /api/songs/:id/download` | download the locally archived audio file |
 
 `GenreInfo = {key:"A"|"B", name, short, color}` (matches the prototype's `Tug.GENRES`).
 

@@ -15,9 +15,22 @@ export interface Song {
   title: string;
   name: string;
   genre: string;
+  bpm: number;
   lyrics: string;
   streamUrl: string; // audiopipe progressive mp3 (playable ~13–20s in)
   finalUrl: string; // cdn m4a (filled on `complete`)
+}
+
+export interface SavedSong {
+  id: string;
+  title: string;
+  name: string;
+  genre: string;
+  bpm: number;
+  lyrics: string;
+  createdAt: string;
+  fileName: string;
+  downloadUrl: string;
 }
 
 export interface GenreInfo {
@@ -47,7 +60,9 @@ export type ClientMsg =
   | { type: "skip" } // drop the queued/generating song, re-run the round
   | { type: "hold" } // keep current playing, pause advancing
   | { type: "resume" } // undo hold
-  | { type: "reset" }; // blank slate — back to the lobby
+  | { type: "reset" } // blank slate — back to the lobby
+  | { type: "endVote" } // force the collecting round to resolve now (testing)
+  | { type: "forceNext" }; // force the stage to crossfade the next song in now (testing)
 
 // ---------------- server → clients ----------------
 export type ServerMsg =
@@ -76,4 +91,8 @@ export type ServerMsg =
   | { type: "generating"; seed: Seed; roundIndex: number }
   | { type: "song_ready"; song: Song } // streamUrl playable
   | { type: "song_final"; id: string; finalUrl: string } // clean CDN url
-  | { type: "now_playing"; id: string };
+  | { type: "song_saved"; song: SavedSong } // downloaded into the local archive
+  | { type: "song_cancelled"; id: string } // remove a skipped queued song
+  | { type: "now_playing"; id: string }
+  | { type: "show_reset" } // stop stage audio and return to the lobby
+  | { type: "force_next" }; // tell the stage to crossfade the queued song in now

@@ -2,6 +2,8 @@ import { CONFIG } from "./config.js";
 import { broadcast } from "./bus.js";
 import { craftSongPrompt } from "./agent.js";
 import { generateSong } from "./suno.js";
+import { songStore } from "./songStore.js";
+import { genreBpm } from "./tempo.js";
 import * as participants from "./participants.js";
 import * as tug from "./tug.js";
 import type { GenreInfo, Phase, Seed, Side, Song } from "./types.js";
@@ -26,6 +28,15 @@ let generating = false;
 let held = false;
 let roundIndex = 0;
 let phase: Phase = "idle";
+let generationEpoch = 0;
+let generationJobSequence = 0;
+let activeGenerationJobId: number | null = null;
+let latestGeneration: { jobId: number; songId: string } | null = null;
+const cancelledGenerationJobs = new Set<number>();
+let songSequence = 0;
+let currentBpm = CONFIG.defaultBpm;
+let lastPlayingId = "";
+const songBpms = new Map<string, number>();
 
 let collectEndsAt = 0; // epoch ms when the current collecting window buzzes
 let buzzerTimer: NodeJS.Timeout | null = null;
@@ -52,8 +63,14 @@ export function reset(): void {
   started = false;
   held = false;
   generating = false;
+  generationEpoch += 1;
+  activeGenerationJobId = null;
+  latestGeneration = null;
+  cancelledGenerationJobs.clear();
   roundIndex = 0;
   phase = "idle";
+  currentBpm = CONFIG.defaultBpm;
+  lastPlayingId = "";
   if (buzzerTimer) {
     clearTimeout(buzzerTimer);
     buzzerTimer = null;
@@ -61,6 +78,7 @@ export function reset(): void {
   tug.reset(genreA, genreB);
   participants.reset();
   console.log("[show] reset → blank lobby");
+  broadcast({ type: "show_reset" });
   broadcast({ type: "names", names: [] }); // clear the stage name cloud
   broadcastTug();
 }
@@ -81,6 +99,9 @@ export function startShow(): void {
  * ahead. This is the round boundary where we reset tug + answers.
  */
 export function onPlaying(id: string): void {
+  if (id === lastPlayingId) return;
+  lastPlayingId = id;
+  currentBpm = songBpms.get(id) ?? currentBpm;
   broadcast({ type: "now_playing", id });
   console.log(`[show] now playing ${id}`);
   if (held) {
@@ -111,6 +132,11 @@ export function applyConfig(msg: {
 /** skip: drop the queued/generating song and re-run the current round. */
 export function skip(): void {
   console.log("[show] skip — re-running current round generation");
+  if (latestGeneration) {
+    cancelledGenerationJobs.add(latestGeneration.jobId);
+    broadcast({ type: "song_cancelled", id: latestGeneration.songId });
+  }
+  activeGenerationJobId = null;
   generating = false; // release the gate so generateNext can fire again
   // Re-resolve from whatever input we currently have for this round.
   resolveAndGenerate();
@@ -128,6 +154,20 @@ export function resume(): void {
   held = false;
   console.log("[show] resume — advancing re-enabled");
   if (started && phase === "playing") beginCollecting();
+}
+
+/** endVote: force the current collecting round to resolve NOW (testing). */
+export function endVote(): void {
+  if (phase !== "collecting") {
+    console.log("[show] endVote ignored — not collecting");
+    return;
+  }
+  if (buzzerTimer) {
+    clearTimeout(buzzerTimer);
+    buzzerTimer = null;
+  }
+  console.log("[show] endVote — forcing buzzer");
+  onBuzzer();
 }
 
 // ---------------- collecting ----------------
@@ -177,7 +217,7 @@ function broadcastTug(): void {
     timeRemaining,
     crowdSize: participants.count(),
     energy: s.energy,
-    bpm: CONFIG.fixedBpm,
+    bpm: currentBpm,
   });
 }
 
@@ -214,10 +254,20 @@ async function generateNext(seed: Seed): Promise<void> {
   }
   generating = true;
   phase = "generating";
-  const id = `song-${roundIndex}`;
+  const epoch = generationEpoch;
+  const jobId = ++generationJobSequence;
+  const id = `song-${Date.now()}-${++songSequence}`;
+  activeGenerationJobId = jobId;
+  latestGeneration = { jobId, songId: id };
+  const bpm = genreBpm(seed.genre);
+  songBpms.set(id, bpm);
+
+  const isCurrentJob = () =>
+    epoch === generationEpoch && !cancelledGenerationJobs.has(jobId);
 
   const releaseGate = () => {
-    if (generating) {
+    if (activeGenerationJobId === jobId && generating) {
+      activeGenerationJobId = null;
       generating = false;
       // The current song is now playable/queued; treat the stage as "playing"
       // for our phase-tracking until the stage confirms via onPlaying.
@@ -235,6 +285,7 @@ async function generateNext(seed: Seed): Promise<void> {
       title: prompt.title,
       name: seed.name,
       genre: seed.genre,
+      bpm,
       lyrics: prompt.lyrics,
       streamUrl: "",
       finalUrl: "",
@@ -243,17 +294,31 @@ async function generateNext(seed: Seed): Promise<void> {
     // Fire the generation; release the gate the moment it's playable.
     generateSong(prompt, {
       onPlayable: (url) => {
+        if (!isCurrentJob()) return;
         song.streamUrl = url;
         console.log(`[show] ${id}: playable (streaming) → sending to stage; gate released`);
         broadcast({ type: "song_ready", song: { ...song } });
         releaseGate(); // next round may begin now
       },
     })
-      .then((result) => {
+      .then(async (result) => {
+        if (!isCurrentJob()) return;
+        song.finalUrl = result.finalUrl;
         broadcast({ type: "song_final", id, finalUrl: result.finalUrl });
         console.log(`[show] ${id}: complete in ${(result.msToComplete / 1000).toFixed(1)}s`);
+        try {
+          const saved = await songStore.save(song, result.finalUrl);
+          broadcast({ type: "song_saved", song: saved });
+          console.log(`[show] ${id}: saved locally as ${saved.fileName}`);
+        } catch (err) {
+          console.error(`[show] ${id}: local save failed —`, (err as Error).message);
+        }
       })
-      .catch((err) => console.error(`[show] ${id}: generation failed —`, (err as Error).message))
+      .catch((err) => {
+        if (isCurrentJob()) {
+          console.error(`[show] ${id}: generation failed —`, (err as Error).message);
+        }
+      })
       .finally(releaseGate); // safety: release if it errored before playable
   } catch (err) {
     console.error(`[show] ${id}: prompt failed —`, (err as Error).message);
