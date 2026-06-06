@@ -94,6 +94,24 @@ export class LocalSongStore {
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 
+  /** Remove a saved song's audio file and metadata sidecar. Returns true if it existed. */
+  async delete(id: string): Promise<boolean> {
+    if (!SAFE_ID.test(id)) return false;
+    const metaPath = path.join(this.rootDir, `${id}.json`);
+    let song: SavedSong | null = null;
+    try {
+      song = JSON.parse(await fs.readFile(metaPath, "utf8")) as SavedSong;
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === "ENOENT") return false;
+      throw err;
+    }
+    if (song?.fileName) {
+      await fs.rm(path.join(this.rootDir, path.basename(song.fileName)), { force: true });
+    }
+    await fs.rm(metaPath, { force: true });
+    return true;
+  }
+
   async fileFor(id: string): Promise<{ song: SavedSong; filePath: string } | null> {
     if (!SAFE_ID.test(id)) return null;
     try {

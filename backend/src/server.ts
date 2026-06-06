@@ -64,6 +64,20 @@ app.get("/api/songs/:id/download", async (req, res) => {
     res.status(500).json({ error: "Could not download the saved song." });
   }
 });
+app.delete("/api/songs/:id", async (req, res) => {
+  try {
+    const removed = await songStore.delete(req.params.id);
+    if (!removed) {
+      res.status(404).json({ error: "Song not found." });
+      return;
+    }
+    broadcast({ type: "song_deleted", id: req.params.id });
+    res.json({ ok: true, id: req.params.id });
+  } catch (err) {
+    console.error("[songs] delete failed:", (err as Error).message);
+    res.status(500).json({ error: "Could not delete the saved song." });
+  }
+});
 app.get("/qr", async (_req, res) => {
   try {
     const svg = await QRCode.toString(JOIN_URL, { type: "svg", margin: 1, color: { dark: "#0A0A0F", light: "#FFFFFF" } });

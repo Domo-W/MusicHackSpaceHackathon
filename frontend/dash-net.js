@@ -120,6 +120,11 @@
   var holdBtn = null;
   var resumeBtn = null;
   var latestSavedSong = null;
+  var savedSongs = []; // full session archive (newest first), from /api/songs
+  var songsPanel = null;
+  var songsList = null;
+  var songsToggle = null;
+  var songsBadge = null;
   var playbackState = { playing: false, canSkip: false, song: null, nextSong: null };
   var showState = {
     started: false,
@@ -195,8 +200,39 @@
       "border-radius:7px;color:#F4F4F8;font:500 11px 'JetBrains Mono',monospace;outline:none}",
       "#dashNetStatus{position:absolute;right:22px;bottom:5px;max-width:360px;overflow:hidden;text-overflow:ellipsis;",
       "white-space:nowrap;font-size:8px;letter-spacing:.08em;color:#8C8C9C;text-transform:uppercase}",
+      // ---- Session Songs slide-out panel ----
+      ".dnp-songs{position:fixed;top:0;bottom:88px;right:0;z-index:9998;width:360px;max-width:92vw;",
+      "transform:translateX(100%);transition:transform .26s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;",
+      "background:rgba(12,12,18,.985);border-left:1px solid rgba(255,255,255,.14);box-shadow:-22px 0 60px rgba(0,0,0,.5);",
+      "font-family:'JetBrains Mono',ui-monospace,monospace;color:#F4F4F8}.dnp-songs.is-open{transform:translateX(0)}",
+      ".dnp-songs-head{display:flex;align-items:center;justify-content:space-between;padding:18px 18px 12px;",
+      "border-bottom:1px solid rgba(255,255,255,.1)}.dnp-songs-title{font:700 13px 'Space Grotesk',system-ui,sans-serif;",
+      "letter-spacing:.04em}.dnp-songs-sub{margin-top:3px;font-size:9px;letter-spacing:.12em;color:#8C8C9C;text-transform:uppercase}",
+      ".dnp-songs-close{width:30px;height:30px;flex:none;border-radius:8px;border:1px solid rgba(255,255,255,.16);",
+      "background:#15151F;color:#F4F4F8;font-size:15px;line-height:1;cursor:pointer}.dnp-songs-close:hover{background:#1B1B27}",
+      ".dnp-songs-list{flex:1;overflow-y:auto;padding:12px 14px 18px;display:flex;flex-direction:column;gap:9px}",
+      ".dnp-songs-empty{padding:34px 18px;text-align:center;font-size:10px;letter-spacing:.1em;color:#6E6E80;text-transform:uppercase}",
+      ".dnp-song{display:flex;align-items:center;gap:11px;padding:11px 12px;border-radius:11px;background:#15151F;",
+      "border:1px solid rgba(255,255,255,.08)}.dnp-song.is-now{border-color:rgba(45,211,111,.6);background:rgba(45,211,111,.07)}",
+      ".dnp-song-num{width:24px;flex:none;text-align:center;font:700 11px 'JetBrains Mono',monospace;color:#8C8C9C}",
+      ".dnp-song.is-now .dnp-song-num{color:#2DD36F}.dnp-song-copy{min-width:0;flex:1}.dnp-song-title{overflow:hidden;",
+      "text-overflow:ellipsis;white-space:nowrap;font:600 12px 'Space Grotesk',system-ui,sans-serif}",
+      ".dnp-song-meta{margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:8px;",
+      "letter-spacing:.09em;color:#8C8C9C;text-transform:uppercase}.dnp-song.is-now .dnp-song-meta{color:#2DD36F}",
+      ".dnp-song-dl{flex:none;height:30px;border-radius:8px;padding:0 11px;border:1px solid rgba(255,255,255,.16);",
+      "background:#191923;color:#F4F4F8;font:600 9px 'Space Grotesk',system-ui,sans-serif;letter-spacing:.08em;",
+      "text-transform:uppercase;cursor:pointer}.dnp-song-dl:hover{border-color:rgba(0,229,255,.5);background:#20202C}",
+      ".dnp-song-del{flex:none;width:30px;height:30px;border-radius:8px;border:1px solid rgba(255,255,255,.12);",
+      "background:#191923;color:#8C8C9C;font-size:13px;line-height:1;cursor:pointer}",
+      ".dnp-song-del:hover{border-color:rgba(255,122,159,.6);color:#FF7A9F;background:#221820}",
+      ".dnp-song-del.is-confirm{width:auto;padding:0 11px;border-color:#FF4D6D;color:#0A0A0F;background:#FF4D6D;",
+      "font:700 9px 'Space Grotesk',system-ui,sans-serif;letter-spacing:.08em;text-transform:uppercase}",
+      ".dnp-songs-toggle{color:#0A0A0F;background:#F4F4F8;border-color:#F4F4F8}",
+      ".dnp-songs-toggle .dnp-songs-badge{margin-left:6px;padding:1px 6px;border-radius:999px;background:#0A0A0F;",
+      "color:#F4F4F8;font-size:9px;font-weight:700}",
       "@media(max-width:900px){#dashNetBar{grid-template-columns:minmax(180px,1fr) auto auto;gap:12px;padding-inline:12px}",
-      ".dnp-download,.dnp-flow{display:none}.dnp-actions{right:0}.dnp-art{width:44px;height:44px}.dnp-meta{display:none}}"
+      ".dnp-download,.dnp-flow{display:none}.dnp-actions{right:0}.dnp-art{width:44px;height:44px}.dnp-meta{display:none}",
+      ".dnp-songs{width:100vw;max-width:100vw}}"
     ].join("");
     document.head.appendChild(style);
   }
@@ -264,18 +300,31 @@
     flow.appendChild(flowMeta);
     right.appendChild(flow);
 
+    // Downloads the track currently LOOPING on the Live screen when it's been
+    // archived (saved on `complete`); otherwise the most recent saved track.
+    // (We generate one ahead, so "latest saved" is often the queued next song —
+    // this targets the one the user actually hears.)
     downloadBtn = makeBtn("Download", "dnp-utility dnp-download", function () {
-      if (!latestSavedSong) return;
-      var a = document.createElement("a");
-      a.href = latestSavedSong.downloadUrl;
-      a.download = latestSavedSong.fileName || "";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      status("downloading " + latestSavedSong.title);
+      var song = nowPlayingSaved() || latestSavedSong;
+      if (!song) return;
+      downloadSong(song);
     });
     downloadBtn.disabled = true;
     right.appendChild(downloadBtn);
+
+    songsToggle = makeBtn("Songs", "dnp-utility dnp-songs-toggle", function () {
+      var open = !songsPanel.classList.contains("is-open");
+      songsPanel.classList.toggle("is-open", open);
+      songsToggle.setAttribute("aria-expanded", open ? "true" : "false");
+      if (open) refreshSongs();
+    });
+    songsToggle.setAttribute("aria-expanded", "false");
+    songsToggle.title = "Session playlist — download any generated track";
+    songsBadge = document.createElement("span");
+    songsBadge.className = "dnp-songs-badge";
+    songsBadge.textContent = "0";
+    songsToggle.appendChild(songsBadge);
+    right.appendChild(songsToggle);
 
     var openLiveBtn = makeBtn("Open Live", "dnp-utility", function () {
       window.open("/stage-live.html", "_blank", "noopener");
@@ -345,6 +394,7 @@
     bar.appendChild(statusEl);
 
     document.body.appendChild(bar);
+    buildSongsPanel();
     updateFlow();
     updateActions();
     document.addEventListener("click", function (event) {
@@ -397,8 +447,12 @@
     });
 
     Net.on("song_saved", function (m) {
-      setLatestSaved(m && m.song);
       if (m && m.song) status("saved locally · " + m.song.title);
+      refreshSongs(); // pull the authoritative archive so the panel stays in order
+    });
+
+    Net.on("song_deleted", function () {
+      refreshSongs(); // a track was pruned (possibly from another view) — re-sync
     });
 
     Net.on("now_playing", function (m) {
@@ -458,6 +512,8 @@
     if (playerPulse) playerPulse.classList.toggle("is-playing", playbackState.playing);
     updateFlow();
     updateActions();
+    renderSongs(); // re-mark the now-playing track in the session panel
+    updateDownloadBtn();
   }
 
   function updateFlow() {
@@ -529,17 +585,163 @@
   function setLatestSaved(song) {
     if (!song) return;
     latestSavedSong = song;
-    if (downloadBtn) {
-      downloadBtn.disabled = false;
-      downloadBtn.title = song.title + " · " + song.genre + " · " + song.bpm + " BPM";
-    }
+    updateDownloadBtn();
   }
 
-  function loadSavedSongs() {
+  // The archived record for the track currently looping on the Live screen, if it
+  // has finished generating and been saved (saved on `complete`). Matched by id.
+  function nowPlayingSaved() {
+    var id = playbackState.song && playbackState.song.id;
+    if (!id) return null;
+    for (var i = 0; i < savedSongs.length; i += 1) {
+      if (savedSongs[i].id === id) return savedSongs[i];
+    }
+    return null;
+  }
+
+  function downloadSong(song) {
+    if (!song || !song.downloadUrl) return;
+    var a = document.createElement("a");
+    a.href = song.downloadUrl;
+    a.download = song.fileName || "";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    status("downloading " + song.title);
+  }
+
+  function updateDownloadBtn() {
+    if (!downloadBtn) return;
+    var target = nowPlayingSaved() || latestSavedSong;
+    downloadBtn.disabled = !target;
+    if (!target) {
+      downloadBtn.title = "No track saved yet";
+      return;
+    }
+    var nowPlaying = target === nowPlayingSaved();
+    downloadBtn.title = (nowPlaying ? "Download the looping track · " : "Download latest · ") +
+      target.title + " · " + target.genre + " · " + target.bpm + " BPM";
+  }
+
+  function buildSongsPanel() {
+    songsPanel = document.createElement("div");
+    songsPanel.className = "dnp-songs";
+
+    var head = document.createElement("div");
+    head.className = "dnp-songs-head";
+    var headCopy = document.createElement("div");
+    var title = document.createElement("div");
+    title.className = "dnp-songs-title";
+    title.textContent = "Session Songs";
+    var sub = document.createElement("div");
+    sub.className = "dnp-songs-sub";
+    sub.textContent = "Every track generated this session";
+    headCopy.appendChild(title);
+    headCopy.appendChild(sub);
+    var closeBtn = makeBtn("✕", "dnp-songs-close", function () {
+      songsPanel.classList.remove("is-open");
+      if (songsToggle) songsToggle.setAttribute("aria-expanded", "false");
+    });
+    closeBtn.setAttribute("aria-label", "Close session songs");
+    head.appendChild(headCopy);
+    head.appendChild(closeBtn);
+    songsPanel.appendChild(head);
+
+    songsList = document.createElement("div");
+    songsList.className = "dnp-songs-list";
+    songsPanel.appendChild(songsList);
+    document.body.appendChild(songsPanel);
+    renderSongs();
+  }
+
+  function renderSongs() {
+    if (!songsList) return;
+    var nowId = playbackState.song && playbackState.song.id;
+    songsList.textContent = "";
+    if (songsBadge) songsBadge.textContent = String(savedSongs.length);
+    if (!savedSongs.length) {
+      var empty = document.createElement("div");
+      empty.className = "dnp-songs-empty";
+      empty.textContent = "No songs yet — they appear here as the crowd generates them.";
+      songsList.appendChild(empty);
+      return;
+    }
+    savedSongs.forEach(function (song, idx) {
+      var row = document.createElement("div");
+      row.className = "dnp-song" + (song.id === nowId ? " is-now" : "");
+
+      var num = document.createElement("div");
+      num.className = "dnp-song-num";
+      num.textContent = song.id === nowId ? "▶" : String(savedSongs.length - idx);
+      row.appendChild(num);
+
+      var copy = document.createElement("div");
+      copy.className = "dnp-song-copy";
+      var t = document.createElement("div");
+      t.className = "dnp-song-title";
+      t.textContent = song.title; // server-derived; safe text
+      var meta = document.createElement("div");
+      meta.className = "dnp-song-meta";
+      meta.textContent = (song.id === nowId ? "Now playing · " : "") +
+        song.genre + " · " + song.bpm + " BPM · for " + song.name; // audience name → textContent
+      copy.appendChild(t);
+      copy.appendChild(meta);
+      row.appendChild(copy);
+
+      var dl = makeBtn("Download", "dnp-song-dl", function () { downloadSong(song); });
+      dl.title = "Download " + song.title;
+      row.appendChild(dl);
+
+      var del = makeBtn("✕", "dnp-song-del", function () {});
+      del.title = "Remove " + song.title + " from the session archive";
+      del.setAttribute("aria-label", "Delete " + song.title);
+      wireDelete(del, song);
+      row.appendChild(del);
+
+      songsList.appendChild(row);
+    });
+  }
+
+  // Two-step inline confirm so a track is never deleted on a single stray click.
+  var deleteConfirmTimer = null;
+  function wireDelete(btn, song) {
+    var armed = false;
+    btn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      if (!armed) {
+        armed = true;
+        btn.classList.add("is-confirm");
+        btn.textContent = "Delete?";
+        if (deleteConfirmTimer) clearTimeout(deleteConfirmTimer);
+        deleteConfirmTimer = setTimeout(function () {
+          armed = false;
+          btn.classList.remove("is-confirm");
+          btn.textContent = "✕";
+        }, 3000);
+        return;
+      }
+      armed = false;
+      if (deleteConfirmTimer) clearTimeout(deleteConfirmTimer);
+      deleteSong(song);
+    });
+  }
+
+  function deleteSong(song) {
+    if (!song || !song.id) return;
+    fetch("/api/songs/" + encodeURIComponent(song.id), { method: "DELETE" })
+      .then(function (res) { return res.ok ? res.json() : Promise.reject(new Error("HTTP " + res.status)); })
+      .then(function () { status("deleted " + song.title); refreshSongs(); })
+      .catch(function (err) { status("delete failed · " + err.message); });
+  }
+
+  function refreshSongs() {
     fetch("/api/songs")
       .then(function (res) { return res.ok ? res.json() : Promise.reject(new Error("HTTP " + res.status)); })
       .then(function (data) {
-        if (data && Array.isArray(data.songs) && data.songs.length) setLatestSaved(data.songs[0]);
+        savedSongs = (data && Array.isArray(data.songs)) ? data.songs : [];
+        if (savedSongs.length) setLatestSaved(savedSongs[0]);
+        renderSongs();
+        updateDownloadBtn();
       })
       .catch(function (err) { console.warn("[dash-net] could not load saved songs:", err.message); });
   }
@@ -547,7 +749,7 @@
   function init() {
     buildStrip();
     wireStatus();
-    loadSavedSongs();
+    refreshSongs();
     status("ready" + (Net.ready() ? " · connected" : ""));
   }
 

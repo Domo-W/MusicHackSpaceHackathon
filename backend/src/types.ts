@@ -106,6 +106,7 @@ export type ServerMsg =
   | { type: "song_ready"; song: Song } // streamUrl playable
   | { type: "song_final"; id: string; finalUrl: string } // clean CDN url
   | { type: "song_saved"; song: SavedSong } // downloaded into the local archive
+  | { type: "song_deleted"; id: string } // removed from the local archive (DJ pruned it)
   | { type: "song_cancelled"; id: string } // remove a skipped queued song
   | { type: "now_playing"; id: string }
   | { type: "show_reset" } // stop stage audio and return to the lobby
