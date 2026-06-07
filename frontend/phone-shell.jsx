@@ -42,6 +42,9 @@ function PhoneShell() {
   const [loading, setLoading] = useState(false);
   const [reveal, setReveal] = useState(null); // {name, genre, answer} from round_result
   const [scale, setScale] = useState(1);
+  // On a real phone, drop the simulated-iPhone frame and fill the screen; keep the
+  // framed preview only on wider (desktop) viewports.
+  const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 600px)').matches);
   const [ended, setEnded] = useState(false);   // show over -> ScreenRecap (merged from design-handoff)
   const [recapTracks, setRecapTracks] = useState([]);
 
@@ -74,9 +77,12 @@ function PhoneShell() {
     r.setProperty('--ecolor', s.color || '#FF1A8C');
   }), []);
 
-  // ---- responsive scale-to-fit (same math as the partner shell) ----
+  // ---- responsive: scale the framed preview (desktop) + detect real mobile ----
   useEffect(() => {
-    const fit = () => setScale(Math.min(window.innerWidth / 402, window.innerHeight / 874, 1));
+    const fit = () => {
+      setScale(Math.min(window.innerWidth / 402, window.innerHeight / 874, 1));
+      setIsMobile(window.matchMedia('(max-width: 600px)').matches);
+    };
     fit();
     window.addEventListener('resize', fit);
     return () => window.removeEventListener('resize', fit);
@@ -168,51 +174,58 @@ function PhoneShell() {
   }, [loading, screen]);
 
   // ---- render ----
-  const Stage = (
+  // The actual app surface. On real mobile it fills the screen directly; on desktop
+  // it sits inside the simulated-iPhone preview frame.
+  const phoneInner = (
+    <div className="phone">
+      <Background />
+
+      {ended ? (
+        <ScreenRecap tracks={recapTracks} onBack={() => setEnded(false)} />
+      ) : (
+      <React.Fragment>
+      <div className="topbar">
+        <span className="live-pill"><i className="live-dot" />LIVE<span className="sep">—</span><span className="show">THE SHOW</span></span>
+        <span className="room-stat"><b>{crowd.crowdSize}</b>&nbsp;HERE · <b>{crowd.bpm}</b>&nbsp;BPM</span>
+      </div>
+
+      <ShellProgress seq={seq} step={step} loading={loading} />
+
+      <div className="deck shell-deck">
+        <div className="deck-pane">
+          {loading ? (
+            <LoadingScreen reveal={reveal} />
+          ) : screen === 'name' ? (
+            <ScreenTexture active />
+          ) : screen === 'vibe' ? (
+            <ScreenVibe active />
+          ) : screen === 'intent' ? (
+            <ScreenIntent active onAdvance={next} />
+          ) : (
+            <VoteScreen />
+          )}
+        </div>
+      </div>
+
+      {/* footer Next — only VIBE needs it (name auto-advances on join;
+          intent self-advances on send; vote is round-driven) */}
+      {!loading && screen === 'vibe' && (
+        <div className="shell-foot">
+          <button className="shell-next" onClick={next}>NEXT →</button>
+        </div>
+      )}
+      </React.Fragment>
+      )}
+    </div>
+  );
+
+  // Real phone → fill the screen (no fake device frame). Desktop → framed preview.
+  const Stage = isMobile ? (
+    <div id="stage" className="stage-bare">{phoneInner}</div>
+  ) : (
     <div id="stage">
       <div style={{ transform: `scale(${scale})`, transformOrigin: 'center center' }}>
-        <IOSDevice dark width={402} height={874}>
-          <div className="phone">
-            <Background />
-
-            {ended ? (
-              <ScreenRecap tracks={recapTracks} onBack={() => setEnded(false)} />
-            ) : (
-            <React.Fragment>
-            <div className="topbar">
-              <span className="live-pill"><i className="live-dot" />LIVE<span className="sep">—</span><span className="show">THE SHOW</span></span>
-              <span className="room-stat"><b>{crowd.crowdSize}</b>&nbsp;HERE · <b>{crowd.bpm}</b>&nbsp;BPM</span>
-            </div>
-
-            <ShellProgress seq={seq} step={step} loading={loading} />
-
-            <div className="deck shell-deck">
-              <div className="deck-pane">
-                {loading ? (
-                  <LoadingScreen reveal={reveal} />
-                ) : screen === 'name' ? (
-                  <ScreenTexture active />
-                ) : screen === 'vibe' ? (
-                  <ScreenVibe active />
-                ) : screen === 'intent' ? (
-                  <ScreenIntent active onAdvance={next} />
-                ) : (
-                  <VoteScreen />
-                )}
-              </div>
-            </div>
-
-            {/* footer Next — only VIBE needs it (name auto-advances on join;
-                intent self-advances on send; vote is round-driven) */}
-            {!loading && screen === 'vibe' && (
-              <div className="shell-foot">
-                <button className="shell-next" onClick={next}>NEXT →</button>
-              </div>
-            )}
-            </React.Fragment>
-            )}
-          </div>
-        </IOSDevice>
+        <IOSDevice dark width={402} height={874}>{phoneInner}</IOSDevice>
       </div>
     </div>
   );

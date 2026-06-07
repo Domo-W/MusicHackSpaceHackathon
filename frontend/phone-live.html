@@ -81,6 +81,15 @@
     .screen.intent .intent-head { flex:0 0 auto; }
     .screen.intent .intent-box-wrap { margin-top:auto; margin-bottom:auto; }
     .screen.intent .intent-foot { flex:0 0 auto; }
+
+    /* ---- Real mobile: drop the simulated-iPhone frame, fill the actual screen,
+       and respect the device notch / home-indicator safe areas. ---- */
+    #stage.stage-bare { display:block; padding:0; }
+    .stage-bare .phone {
+      position:fixed; inset:0; height:100dvh; box-sizing:border-box;
+      padding-top: env(safe-area-inset-top);
+      padding-bottom: env(safe-area-inset-bottom);
+    }
   </style>
 </head>
 <body>
