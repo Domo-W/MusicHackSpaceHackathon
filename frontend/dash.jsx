@@ -58,14 +58,17 @@ const DASH_CSS = `
   .sl-foot { font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; color: var(--dim); text-transform: uppercase; }
   /* Past Sets panel */
   .ps-empty { margin: auto; text-align: center; font-family: var(--mono); font-size: 13px; color: var(--dim-2); padding: 30px; }
-  .ps-set { border: 1px solid var(--line); border-radius: 11px; background: var(--surface-2); overflow: hidden; }
+  .ps-set { border: 1px solid var(--line); border-radius: 11px; background: var(--surface-2); overflow: hidden; flex: none; }
   .ps-set-head { width: 100%; display: flex; align-items: center; gap: 10px; padding: 10px 13px; background: transparent; border: 0; color: var(--text); cursor: pointer; font-family: var(--disp); }
   .ps-set-head:hover { background: var(--surface-3); }
   .ps-caret { color: var(--dim); font-size: 11px; transition: transform .15s; }
   .ps-caret.open { transform: rotate(90deg); color: var(--cyan); }
   .ps-set-title { font-weight: 600; font-size: 13px; }
   .ps-set-count { margin-left: auto; font-family: var(--mono); font-size: 10px; color: var(--dim); text-transform: uppercase; }
-  .ps-tracks { display: flex; flex-direction: column; gap: 4px; padding: 4px 8px 8px; }
+  .ps-tracks { display: flex; flex-direction: column; gap: 4px; padding: 4px 8px 8px; max-height: 320px; overflow-y: auto; }
+  .ps-tracks::-webkit-scrollbar { width: 7px; }
+  .ps-tracks::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 99px; }
+  .ps-track { flex: none; }
   .ps-track { display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: 8px; background: rgba(255,255,255,0.02); }
   .ps-track.is-playing { background: color-mix(in srgb, var(--cyan) 12%, var(--surface-2)); }
   .ps-play { flex: none; width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--line-2); background: var(--surface-3); color: var(--cyan); font-size: 10px; cursor: pointer; display: grid; place-items: center; }

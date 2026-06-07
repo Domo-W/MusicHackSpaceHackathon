@@ -558,12 +558,37 @@
 }
 .rc-list::-webkit-scrollbar { width: 0; }
 .rc-row {
-  display: flex; align-items: center; gap: 12px; flex: none;
+  display: flex; align-items: center; gap: 12px; flex: none; cursor: pointer;
   background: var(--surface); border: 1.5px solid var(--line); border-radius: 16px;
   padding: 12px 12px 12px 14px;
   transition: border-color .14s ease, background .14s ease;
 }
 .rc-row:active { border-color: var(--line-strong); }
+
+/* full-screen lyrics view — tap a track to read along while it plays */
+.rc-lyrics {
+  position: absolute; inset: 0; z-index: 40; display: flex; flex-direction: column;
+  background: linear-gradient(180deg, #0c0c14 0%, #07070b 100%);
+  padding: 16px 18px calc(18px + env(safe-area-inset-bottom)); gap: 14px;
+}
+.rcl-top { display: flex; align-items: center; justify-content: space-between; flex: none; }
+.rcl-back { background: none; border: none; color: var(--text-dim); font-family: var(--mono);
+  font-size: 13px; font-weight: 700; letter-spacing: 0.08em; padding: 8px 2px; cursor: pointer; }
+.rcl-play { width: 54px; height: 54px; border-radius: 50%; border: 1.5px solid var(--line-strong);
+  background: var(--surface); color: var(--text); display: grid; place-items: center; cursor: pointer; }
+.rcl-play svg { width: 22px; height: 22px; }
+.rcl-head { flex: none; }
+.rcl-title { font-family: var(--disp); font-weight: 700; font-size: 26px; line-height: 1.05;
+  text-transform: uppercase; color: var(--text); }
+.rcl-by { font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--text-dim); margin-top: 6px; }
+.rcl-prog { height: 4px; border-radius: 999px; background: rgba(255,255,255,.12); overflow: hidden; flex: none; }
+.rcl-prog i { display: block; height: 100%; border-radius: 999px;
+  background: linear-gradient(90deg, var(--cyan, #00E5FF), var(--magenta, #FF1A8C)); transition: width .4s linear; }
+.rcl-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+  white-space: pre-wrap; font-family: var(--disp); font-weight: 500; font-size: 21px; line-height: 1.62;
+  color: rgba(255,255,255,0.88); padding: 2px 2px 34px; }
+.rcl-body::-webkit-scrollbar { width: 0; }
 .rc-idx {
   font-family: var(--mono); font-size: 12px; font-weight: 700; letter-spacing: 0.04em;
   color: var(--text-dim); flex: none; width: 20px; text-align: center;

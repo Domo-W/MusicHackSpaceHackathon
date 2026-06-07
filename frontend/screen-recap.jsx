@@ -76,6 +76,7 @@ function ScreenRecap({ onBack, tracks: propTracks, playlistUrl }) {
   const curRef = useRef(currentId); curRef.current = currentId;
   const audioRef = useRef(null);
   const [dur, setDur] = useState(0); // real duration from the loaded audio
+  const [lyricsId, setLyricsId] = useState(null); // track whose lyrics fill the screen
 
   useEffect(() => {
     const id = setTimeout(() => setStage(tracks.length ? 'ready' : 'empty'), 1400);
@@ -125,6 +126,15 @@ function ScreenRecap({ onBack, tracks: propTracks, playlistUrl }) {
     if (idx > -1 && idx < tracks.length - 1) startTrack(tracks[idx + 1]);
     else setPlaying(false);
   };
+
+  // Tapping a track opens the full-screen lyrics view AND plays it, so you can
+  // read along while it streams. Closing returns to the list (audio keeps going).
+  const openLyrics = (t) => {
+    haptic(10);
+    setLyricsId(t.id);
+    if (t.id !== currentId || (audioRef.current && audioRef.current.paused)) startTrack(t);
+  };
+  const closeLyrics = () => setLyricsId(null);
 
   const saveOne = (t) => {
     if (savedIds[t.id]) return;
@@ -205,13 +215,15 @@ function ScreenRecap({ onBack, tracks: propTracks, playlistUrl }) {
               const saved = !!savedIds[t.id];
               const isCur = t.id === currentId;
               return (
-                <div className={'rc-row' + (isCur ? ' current' : '')} key={t.id}>
+                <div className={'rc-row' + (isCur ? ' current' : '')} key={t.id}
+                  role="button" tabIndex={0} onClick={() => openLyrics(t)}
+                  aria-label={'Play ' + t.title + ' and read the lyrics'}>
                   {isCur && <span className="rc-prog" style={{ width: pct + '%' }} />}
-                  <button className="rc-lead" onClick={() => playTrack(t)} aria-label={isCur && playing ? 'Pause' : 'Play ' + t.title}>
+                  <span className="rc-lead" aria-hidden="true">
                     {isCur && playing
                       ? <span className="eq" aria-hidden="true"><i /><i /><i /></span>
                       : isCur ? <PlayIcon /> : String(i + 1).padStart(2, '0')}
-                  </button>
+                  </span>
                   <div className="rc-main">
                     <span className="rc-title">{t.title}</span>
                     <span className="rc-meta">
@@ -220,7 +232,9 @@ function ScreenRecap({ onBack, tracks: propTracks, playlistUrl }) {
                       <span className="rc-dur">{fmt(t.dur)}</span>
                     </span>
                   </div>
-                  <button className={'rc-dl' + (saved ? ' saved' : '')} onClick={() => saveOne(t)} aria-label={saved ? 'Saved' : 'Download ' + t.title}>
+                  <button className={'rc-dl' + (saved ? ' saved' : '')}
+                    onClick={(e) => { e.stopPropagation(); saveOne(t); }}
+                    aria-label={saved ? 'Saved' : 'Download ' + t.title}>
                     {saved ? <CheckIcon /> : <DownloadIcon />}
                   </button>
                 </div>
@@ -247,6 +261,27 @@ function ScreenRecap({ onBack, tracks: propTracks, playlistUrl }) {
           </div>
         )}
       </div>
+
+      {(() => {
+        const lt = lyricsId ? tracks.find((t) => t.id === lyricsId) : null;
+        if (!lt) return null;
+        return (
+          <div className="rc-lyrics" onClick={(e) => e.stopPropagation()}>
+            <div className="rcl-top">
+              <button className="rcl-back" onClick={closeLyrics} aria-label="Back to the set">‹ Back</button>
+              <button className="rcl-play" onClick={masterToggle} aria-label={playing ? 'Pause' : 'Play'}>
+                {playing && lt.id === currentId ? <PauseIcon /> : <PlayIcon />}
+              </button>
+            </div>
+            <div className="rcl-head">
+              <div className="rcl-title">{lt.title}</div>
+              <div className="rcl-by">{lt.genre} · by {lt.by}</div>
+            </div>
+            <div className="rcl-prog"><i style={{ width: (lt.id === currentId ? pct : 0) + '%' }} /></div>
+            <div className="rcl-body">{lt.lyrics ? lt.lyrics : 'No lyrics saved for this track.'}</div>
+          </div>
+        );
+      })()}
 
       <div className="phone-toast" data-show={toast.show ? '1' : '0'}>{toast.msg}</div>
     </React.Fragment>

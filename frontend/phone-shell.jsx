@@ -35,6 +35,7 @@ function mapSavedSongs(songs) {
     dur: 200,
     fileName: s.fileName,
     downloadUrl: s.downloadUrl,
+    lyrics: s.lyrics || '', // shown in the full-screen lyrics view when a track is tapped
   }));
 }
 
@@ -51,6 +52,7 @@ function PhoneShell() {
   const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 600px)').matches);
   const [ended, setEnded] = useState(false);   // show over -> ScreenRecap (merged from design-handoff)
   const [recapTracks, setRecapTracks] = useState([]);
+  const [round, setRound] = useState(0);       // current backend round (drives per-round re-join)
 
   const seq = participated ? SEQ_RETURNING : SEQ_NEW;
   const screen = seq[Math.min(step, seq.length - 1)];
@@ -112,6 +114,7 @@ function PhoneShell() {
       if (!m) return;
       if (m.phase === 'idle') {
         formedRound.current = 0;
+        setRound(0);
         setLoading(false);
         setReveal(null);
         setStep(0);
@@ -128,6 +131,7 @@ function PhoneShell() {
       if (m.phase === 'gathering' || m.phase === 'collecting') {
         const changedRound = m.round !== formedRound.current;
         formedRound.current = m.round;
+        setRound(m.round);
         // A new round means a new set is live again — leave the recap.
         setEnded(false);
         if (loadingRef.current || changedRound) {
@@ -140,10 +144,12 @@ function PhoneShell() {
     const offTug = window.Net.on('tug', (m) => {
       if (m && m.phase === 'idle') {
         formedRound.current = 0;
+        setRound(0);
         setLoading(false);
         setReveal(null);
       } else if (m && (m.phase === 'gathering' || m.phase === 'collecting') && m.round !== formedRound.current) {
         formedRound.current = m.round;
+        setRound(m.round);
         // A new collecting round means a new set is live again — leave the recap.
         setEnded(false);
         // Only RESET the walkthrough for a brand-new song round (i.e. we were
@@ -161,25 +167,25 @@ function PhoneShell() {
 
   const next = useCallback(() => setStep((s) => Math.min(s + 1, seq.length - 1)), [seq.length]);
 
-  // NAME step auto-advances the moment the join registers — typing your name and
-  // hitting send moves you forward (form-style). Only for FIRST-time joiners: a
-  // returning participant is already joined, so this would instantly skip their
-  // name screen — they advance with the Continue button instead.
+  // A new round (>1) clears everyone on the backend — re-join: forget the old id
+  // and drop to the NAME screen so the user re-types their name into the mix.
   useEffect(() => {
-    if (!loading && screen === 'name' && joined && !participated) {
+    if (round > 1) {
+      if (window.__resetJoinState) window.__resetJoinState();
+      setJoined(false);
+      setStep(0);
+    }
+  }, [round]);
+
+  // NAME step auto-advances the moment the join registers — typing your name and
+  // submitting moves you to "I want to…". `joined` is reset every round, so this
+  // fires fresh each time (no instant-skip) for everyone, new or returning.
+  useEffect(() => {
+    if (!loading && screen === 'name' && joined) {
       const id = setTimeout(() => setStep((s) => (seq[s] === 'name' ? Math.min(s + 1, seq.length - 1) : s)), 400);
       return () => clearTimeout(id);
     }
-  }, [loading, screen, joined, participated, seq]);
-
-  // Returning participants are already joined, so submitting a name (Enter) on the
-  // re-entry screen won't fire a 'joined' event — phone-net calls this instead so
-  // Enter advances them just like a first-timer. Guarded to the name step so it
-  // can never double-advance past intent.
-  useEffect(() => {
-    window.__advanceFromName = () => setStep((s) => (seq[s] === 'name' ? Math.min(s + 1, seq.length - 1) : s));
-    return () => { if (window.__advanceFromName) delete window.__advanceFromName; };
-  }, [seq]);
+  }, [loading, screen, joined, seq]);
 
   // INTENT step: focus the field as soon as it shows so the keyboard is up
   // (desktop). iOS needs a tap to open the soft keyboard — unavoidable there.
@@ -224,13 +230,6 @@ function PhoneShell() {
       {!loading && screen === 'vibe' && (
         <div className="shell-foot">
           <button className="shell-next" onClick={next}>NEXT →</button>
-        </div>
-      )}
-      {/* Returning participants re-confirm the name screen with Continue (first-time
-          joiners auto-advance on join, so they don't need it). */}
-      {!loading && screen === 'name' && participated && (
-        <div className="shell-foot">
-          <button className="shell-next" onClick={next}>CONTINUE →</button>
         </div>
       )}
       </React.Fragment>

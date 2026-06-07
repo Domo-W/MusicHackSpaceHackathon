@@ -346,12 +346,14 @@ function beginGathering(): void {
     genreB = { ...automaticPair.B };
     genreSource = "auto";
   }
-  // Round boundary: reset the tug + everyone's answers for the new round.
-  // EXCEPTION: round 1 is a cold start — pulls/answers that arrived BEFORE the
-  // operator pressed Start must carry in, so do NOT reset on the first round.
+  // Round boundary: reset the tug + clear EVERYONE so each round starts fresh —
+  // the crowd re-submits their name (and intent) every round, so the name cloud
+  // reflects who's in for THIS round. EXCEPTION: round 1 is a cold start — joins
+  // that arrived BEFORE the operator pressed Start must carry in.
   if (roundIndex > 1) {
     tug.reset(genreA, genreB);
-    participants.clearRound();
+    participants.reset();
+    broadcast({ type: "names", names: [] }); // clear the stage name cloud immediately
   }
   phase = "gathering";
   endedRecap = null; // a new round means the set is live again, not in recap

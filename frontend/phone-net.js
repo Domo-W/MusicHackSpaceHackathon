@@ -39,11 +39,20 @@
   //      keep ONE stable participantId (answer/pull must reference it). ----
   function submitName(name) {
     const n = String(name || '').trim().slice(0, 40);
-    if (!n || joinSent) return;
+    if (!n) return;
+    window.__participantName = n; // remembered so the intent screen can say "<NAME> wants to…"
+    if (joinSent) return;
     joinSent = true;
     if (window.Net) window.Net.send({ type: 'join', name: n });
   }
   window.submitName = submitName;
+
+  // A new round clears everyone on the backend, so the phone must re-join: forget
+  // the old (now-invalid) id and allow the next name submit to register again.
+  window.__resetJoinState = function () {
+    joinSent = false;
+    window.__participantId = null;
+  };
 
   // ---- Best-effort auto-hook for the NAME screen (screen-texture.jsx).
   //      That screen's only outbound is CrowdSim.addWord(text); it fires
@@ -60,16 +69,8 @@
       const r = origAddWord(text);
       try {
         const t = String(text || '').trim();
-        if (t && !looksLikeEmoji(t)) {
-          if (!joinSent) {
-            // first real name → join; the shell auto-advances on the 'joined' event.
-            submitName(t);
-          } else if (window.__advanceFromName) {
-            // returning participant (already joined): submitting a name on the
-            // re-entry screen advances them too, so they don't have to tap Continue.
-            window.__advanceFromName();
-          }
-        }
+        // First real (non-emoji) name → join; the shell auto-advances on 'joined'.
+        if (t && !joinSent && !looksLikeEmoji(t)) submitName(t);
       } catch (e) {}
       return r;
     };

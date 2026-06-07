@@ -1,8 +1,6 @@
 /* ============================================================
    screen-texture.jsx — Screen 2: SHOUT THE TEXTURE (word wall)
    ============================================================ */
-const TEX_EMOJI = ['🙌', '🔥', '❤️', '🥂', '✨'];
-
 function ScreenTexture({ active }) {
   const [words, setWords] = useState([]);      // [{text,count,mine,ts,bump}]
   const [ghosts, setGhosts] = useState([]);    // ephemeral rising tokens
@@ -31,18 +29,36 @@ function ScreenTexture({ active }) {
     setTimeout(() => setGhosts((g) => g.filter((gh) => gh.id !== id)), 1700);
   }, []);
 
-  // listen to the crowd
-  useEffect(() => window.CrowdSim.on('word', (d) => ingest(d.text, d.mine)), [ingest]);
+  const norm = (s) => String(s || '').trim().toUpperCase().slice(0, 16);
+  // Reconcile the wall to the REAL submitted names (no simulated chatter): add
+  // missing, drop names that cleared — e.g. at the start of a new round.
+  const syncNames = useCallback((list) => {
+    const me = norm(window.__participantName);
+    const wanted = (list || []).map(norm).filter(Boolean);
+    const wantedSet = new Set(wanted);
+    setWords((prev) => {
+      const next = prev.filter((w) => wantedSet.has(w.text));
+      wanted.forEach((t) => { if (!next.find((w) => w.text === t)) next.push({ text: t, count: 1, mine: t === me, ts: Date.now(), bump: false }); });
+      return next.slice(0, 26);
+    });
+  }, []);
+
+  // Real names only — they appear live as people join and clear each round.
+  useEffect(() => {
+    const N = window.Net;
+    if (!N || !N.on) return;
+    const off1 = N.on('name', (m) => { if (m && m.name) ingest(m.name, norm(m.name) === norm(window.__participantName)); });
+    const off2 = N.on('names', (m) => syncNames((m && m.names) || []));
+    return () => { off1 && off1(); off2 && off2(); };
+  }, [ingest, syncNames]);
 
   const submit = (e) => {
     e && e.preventDefault();
     if (!val.trim()) return;
-    ingest(val, true);
-    window.CrowdSim.addWord(val);
+    if (window.submitName) window.submitName(val); // join + broadcast the real name to everyone
     haptic(16);
     setVal('');
   };
-  const tapEmoji = (em) => { ingest(em, true); window.CrowdSim.addWord(em); haptic(12); };
 
   const maxCount = words.reduce((m, w) => Math.max(m, w.count), 0);
   const trend = words.length ? words[0] : null; // already sorted desc

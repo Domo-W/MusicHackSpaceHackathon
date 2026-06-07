@@ -90,11 +90,13 @@ function ScreenIntent({ active, onAdvance }) {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); }
   };
 
+  // Personalize the prompt with the name they just entered: "<NAME> WANTS TO…".
+  const who = ((typeof window !== 'undefined' && window.__participantName) || '').trim();
   return (
     <div className="screen intent">
       <div className="intent-head">
         <span className="screen-kicker">JOIN THE ROOM</span>
-        <h1 className="intent-title">I WANT TO<span className="it-dots">…</span></h1>
+        <h1 className="intent-title">{who ? who.toUpperCase() + ' WANTS TO' : 'I WANT TO'}<span className="it-dots">…</span></h1>
       </div>
 
       <div className="intent-box-wrap">
