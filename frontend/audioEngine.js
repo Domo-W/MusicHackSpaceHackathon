@@ -198,13 +198,20 @@
   };
 
   function emitState() {
+    const el = current ? current.el : null;
+    const dur = el && isFinite(el.duration) ? el.duration : 0;
     onState({
       playing: !!current && !paused,
       canSkip: !!pending,
       song: current ? current.song : null,
       nextSong: pending ? pending.song : null,
+      position: el ? el.currentTime || 0 : 0,
+      duration: dur,
     });
   }
+
+  // Re-emit ~1×/s so the dashboard's progress bar + time stay live as the song plays.
+  setInterval(function () { if (current) emitState(); }, 1000);
 
   function log(msg) {
     if (window.__spineLog) window.__spineLog(msg);

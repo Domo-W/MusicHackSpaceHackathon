@@ -27,6 +27,8 @@
         canSkip: !!state.canSkip,
         song: state.song || undefined,
         nextSong: state.nextSong || undefined,
+        position: state.position || 0,
+        duration: state.duration || 0,
       });
     },
   });

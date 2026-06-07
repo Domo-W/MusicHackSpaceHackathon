@@ -115,6 +115,9 @@
   var skipSongBtn = null;
   var playerLabel = null;
   var playerMeta = null;
+  var playerProgBar = null;
+  var playerProgFill = null;
+  var playerProgTime = null;
   var playerPulse = null;
   var flowLabel = null;
   var flowMeta = null;
@@ -139,6 +142,11 @@
 
   function status(text) {
     if (statusEl) statusEl.textContent = text;
+  }
+
+  function fmtTime(s) {
+    s = Math.max(0, Math.floor(s || 0));
+    return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
   }
 
   function makeBtn(label, className, onClick) {
@@ -168,6 +176,10 @@
       ".dnp-title{margin-top:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;",
       "font:600 14px 'Space Grotesk',system-ui,sans-serif;letter-spacing:.02em}.dnp-meta{margin-top:3px;",
       "overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:9px;letter-spacing:.1em;color:#8C8C9C;text-transform:uppercase}",
+      ".dnp-prog{display:flex;align-items:center;gap:9px;margin-top:6px}",
+      ".dnp-prog-bar{flex:1;min-width:60px;height:4px;border-radius:999px;background:rgba(255,255,255,.12);overflow:hidden}",
+      ".dnp-prog-bar i{display:block;height:100%;width:0;border-radius:999px;background:linear-gradient(90deg,#00E5FF,#FF1A8C);transition:width .9s linear}",
+      ".dnp-prog-time{flex:none;font:600 9px 'JetBrains Mono',monospace;letter-spacing:.06em;color:#8C8C9C;white-space:nowrap}",
       ".dnp-transport{display:flex;align-items:center;gap:12px}.dnp-transport button,.dnp-utility{border:1px solid rgba(255,255,255,.16);",
       "color:#F4F4F8;background:#15151F;transition:opacity .15s,border-color .15s,background .15s,transform .12s}",
       ".dnp-transport button:hover:not(:disabled),.dnp-utility:hover:not(:disabled){border-color:rgba(255,255,255,.42);background:#1B1B27}",
@@ -229,9 +241,22 @@
     playerMeta = document.createElement("div");
     playerMeta.className = "dnp-meta";
     playerMeta.textContent = "Waiting for the first generated track";
+    // progress bar + time (how far into the track / how long it is)
+    var prog = document.createElement("div");
+    prog.className = "dnp-prog";
+    playerProgBar = document.createElement("span");
+    playerProgBar.className = "dnp-prog-bar";
+    playerProgFill = document.createElement("i");
+    playerProgBar.appendChild(playerProgFill);
+    playerProgTime = document.createElement("span");
+    playerProgTime.className = "dnp-prog-time";
+    playerProgTime.textContent = "0:00 / 0:00";
+    prog.appendChild(playerProgBar);
+    prog.appendChild(playerProgTime);
     copy.appendChild(kicker);
     copy.appendChild(playerLabel);
     copy.appendChild(playerMeta);
+    copy.appendChild(prog);
     nowPlaying.appendChild(art);
     nowPlaying.appendChild(copy);
     bar.appendChild(nowPlaying);
@@ -401,6 +426,8 @@
         canSkip: !!(m && m.canSkip),
         song: m && m.song ? m.song : null,
         nextSong: m && m.nextSong ? m.nextSong : null,
+        position: m && typeof m.position === "number" ? m.position : 0,
+        duration: m && typeof m.duration === "number" ? m.duration : 0,
       };
       updatePlayer();
     });
@@ -444,6 +471,20 @@
         ? (playbackState.playing ? "Playing" : "Paused") + " · " +
           playbackState.song.genre + " · " + playbackState.song.bpm + " BPM · for " + playbackState.song.name
         : "Waiting for the first generated track";
+    }
+    if (playerProgFill && playerProgTime) {
+      var dur = playbackState.duration || 0;
+      var pos = Math.min(playbackState.position || 0, dur || Infinity);
+      var pct = dur > 0 ? Math.max(0, Math.min(100, (pos / dur) * 100)) : 0;
+      playerProgFill.style.width = pct + "%";
+      if (playbackState.song && dur > 0) {
+        var remain = Math.max(0, dur - pos);
+        playerProgTime.textContent = fmtTime(pos) + " / " + fmtTime(dur) + " · -" + fmtTime(remain);
+      } else if (playbackState.song) {
+        playerProgTime.textContent = "loading length…"; // streaming, duration not known yet
+      } else {
+        playerProgTime.textContent = "0:00 / 0:00";
+      }
     }
     if (playerPulse) playerPulse.classList.toggle("is-playing", playbackState.playing);
     updateFlow();

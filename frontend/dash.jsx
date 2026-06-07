@@ -56,6 +56,26 @@ const DASH_CSS = `
   .sl-del.is-confirm { width: auto; padding: 0 12px; background: #FF4D6D; border-color: #FF4D6D; color: #0A0A0F; }
   .sl-empty { margin: auto; text-align: center; font-family: var(--mono); font-size: 13px; color: var(--dim-2); padding: 30px; }
   .sl-foot { font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; color: var(--dim); text-transform: uppercase; }
+  /* Past Sets panel */
+  .ps-empty { margin: auto; text-align: center; font-family: var(--mono); font-size: 13px; color: var(--dim-2); padding: 30px; }
+  .ps-set { border: 1px solid var(--line); border-radius: 11px; background: var(--surface-2); overflow: hidden; }
+  .ps-set-head { width: 100%; display: flex; align-items: center; gap: 10px; padding: 10px 13px; background: transparent; border: 0; color: var(--text); cursor: pointer; font-family: var(--disp); }
+  .ps-set-head:hover { background: var(--surface-3); }
+  .ps-caret { color: var(--dim); font-size: 11px; transition: transform .15s; }
+  .ps-caret.open { transform: rotate(90deg); color: var(--cyan); }
+  .ps-set-title { font-weight: 600; font-size: 13px; }
+  .ps-set-count { margin-left: auto; font-family: var(--mono); font-size: 10px; color: var(--dim); text-transform: uppercase; }
+  .ps-tracks { display: flex; flex-direction: column; gap: 4px; padding: 4px 8px 8px; }
+  .ps-track { display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: 8px; background: rgba(255,255,255,0.02); }
+  .ps-track.is-playing { background: color-mix(in srgb, var(--cyan) 12%, var(--surface-2)); }
+  .ps-play { flex: none; width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--line-2); background: var(--surface-3); color: var(--cyan); font-size: 10px; cursor: pointer; display: grid; place-items: center; }
+  .ps-play:hover { border-color: var(--cyan); }
+  .ps-copy { min-width: 0; flex: 1; }
+  .ps-title { font-family: var(--disp); font-weight: 600; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ps-meta { margin-top: 2px; font-family: var(--mono); font-size: 9px; letter-spacing: 0.04em; color: var(--dim); text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ps-dl { flex: none; height: 28px; padding: 0 10px; border-radius: 7px; border: 1px solid var(--line-2); background: var(--surface-3); color: var(--text); font-family: var(--disp); font-weight: 600; font-size: 9.5px; letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; }
+  .ps-dl:hover { border-color: rgba(0,229,255,0.5); }
+  .ps-foot { font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; color: var(--dim); text-transform: uppercase; }
   /* opener brief field in Panel 03 */
   .opener-field { display: flex; flex-direction: column; gap: 7px; margin-bottom: 12px; }
   .opener-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; color: var(--dim); text-transform: uppercase; }
@@ -112,6 +132,12 @@ const DASH_CSS = `
     padding: 1px 6px; border-radius: 999px; background: currentColor; }
   .tg-chip.sel-a .tg-badge { color: #061018; }
   .tg-chip.sel-b .tg-badge { color: #0A0A0F; }
+  .tg-chip.off { opacity: 0.4; }
+  .tg-chip.off .tg-chip-name { text-decoration: line-through; }
+  .tg-chip.off.sel-a, .tg-chip.off.sel-b { border-color: var(--line); color: var(--dim); background: var(--surface-2); }
+  .tg-toggle { margin-left: auto; flex: none; width: 22px; height: 22px; border-radius: 6px; border: 1px solid var(--line); background: transparent; color: var(--dim-2); font-size: 12px; cursor: pointer; display: grid; place-items: center; }
+  .tg-toggle.on { color: #2DD36F; border-color: rgba(45,211,111,0.4); }
+  .tg-toggle:hover { border-color: var(--line-2); }
   /* opener field */
   .opener-field { margin-bottom: 7px; gap: 4px; }
   .opener-label { font-size: 8.5px; }
@@ -201,6 +227,109 @@ function Setlist() {
   );
 }
 
+/* ===== PANEL 01 — PAST SETS =====
+   Browse previously generated sets (the archive clustered into "sets" by gaps in
+   creation time) and preview/play or download any track. */
+function PastSets() {
+  const [songs, setSongs] = useState([]);
+  const [open, setOpen] = useState({});      // setKey -> expanded
+  const [playId, setPlayId] = useState(null); // currently previewing track id
+  const audioRef = useRef(null);
+
+  const refresh = () => fetch('/api/songs')
+    .then((r) => (r.ok ? r.json() : { songs: [] }))
+    .then((d) => setSongs(Array.isArray(d.songs) ? d.songs : []))
+    .catch(() => {});
+
+  useEffect(() => {
+    refresh();
+    const N = window.Net;
+    if (!N || !N.on) return;
+    const offSaved = N.on('song_saved', refresh);
+    const offDeleted = N.on('song_deleted', refresh);
+    return () => { offSaved && offSaved(); offDeleted && offDeleted(); };
+  }, []);
+
+  // cluster the archive into "sets" by >25-min gaps in creation time
+  const sets = useMemo(() => {
+    const sorted = [...songs].sort((a, b) => a.createdAt.localeCompare(b.createdAt)); // oldest first
+    const GAP = 25 * 60 * 1000;
+    const out = [];
+    let cur = null;
+    for (const s of sorted) {
+      const t = Date.parse(s.createdAt);
+      if (!cur || t - cur.last > GAP) { cur = { startedAt: s.createdAt, last: t, tracks: [] }; out.push(cur); }
+      cur.tracks.push(s); cur.last = t;
+    }
+    return out.reverse(); // newest set first
+  }, [songs]);
+
+  useEffect(() => { if (sets.length) setOpen((o) => (o.__init ? o : { __init: true, [sets[0].startedAt]: true })); }, [sets.length]);
+
+  const fmtSet = (iso) => {
+    const d = new Date(iso);
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' · ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  };
+  const togglePlay = (track) => {
+    const a = audioRef.current;
+    if (!a) return;
+    if (playId === track.id) { a.pause(); setPlayId(null); return; }
+    a.src = track.downloadUrl;
+    a.play().then(() => setPlayId(track.id)).catch(() => setPlayId(null));
+  };
+  const download = (s) => {
+    const a = document.createElement('a');
+    a.href = s.downloadUrl; a.download = s.fileName || '';
+    document.body.appendChild(a); a.click(); a.remove();
+  };
+
+  return (
+    <div className="panel">
+      <div className="panel-head">
+        <div className="panel-num">PANEL 01</div>
+        <div className="panel-title">Past Sets</div>
+        <div className="panel-sub">Browse previous sets — preview, play, or download any track</div>
+      </div>
+      <div className="panel-body">
+        <audio ref={audioRef} onEnded={() => setPlayId(null)} />
+        {sets.length === 0
+          ? <div className="ps-empty">No sets yet — generated tracks gather here.</div>
+          : sets.map((set, si) => {
+            const isOpen = !!open[set.startedAt];
+            return (
+              <div className="ps-set" key={set.startedAt}>
+                <button className="ps-set-head" onClick={() => setOpen((o) => ({ ...o, [set.startedAt]: !o[set.startedAt] }))}>
+                  <span className={'ps-caret' + (isOpen ? ' open' : '')}>▸</span>
+                  <span className="ps-set-title">{si === 0 ? 'Latest set' : 'Set'} · {fmtSet(set.startedAt)}</span>
+                  <span className="ps-set-count">{set.tracks.length} track{set.tracks.length === 1 ? '' : 's'}</span>
+                </button>
+                {isOpen && (
+                  <div className="ps-tracks">
+                    {[...set.tracks].reverse().map((t) => (
+                      <div className={'ps-track' + (playId === t.id ? ' is-playing' : '')} key={t.id}>
+                        <button className="ps-play" onClick={() => togglePlay(t)} aria-label={playId === t.id ? 'Pause' : 'Play'}>
+                          {playId === t.id ? '❚❚' : '▶'}
+                        </button>
+                        <div className="ps-copy">
+                          <div className="ps-title">{t.title}</div>
+                          <div className="ps-meta">{t.genre} · {t.bpm} BPM · for {t.name}</div>
+                        </div>
+                        <button className="ps-dl" onClick={() => download(t)}>Download</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+      </div>
+      <div className="panel-foot">
+        <div className="ps-foot">{songs.length} track{songs.length === 1 ? '' : 's'} · {sets.length} set{sets.length === 1 ? '' : 's'} archived</div>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   // Pre-filled with the phone's default Pick-the-Vibe options so the dashboard and
   // crowd screen are visibly in sync from the start (edit + push to change them).
@@ -208,6 +337,7 @@ function App() {
   const [opener, setOpener] = useState(''); // optional first-song (opener) brief
   const [sideA, setSideA] = useState('soca');
   const [sideB, setSideB] = useState('afrobeats');
+  const [disabledGenres, setDisabledGenres] = useState({}); // id -> true = toggled OFF (unavailable)
   const [toast, setToast] = useState({ msg: '', color: '', show: false });
   const [clock, setClock] = useState('');
   const toastTimer = useRef(null);
@@ -250,11 +380,21 @@ function App() {
   // Single-grid picker: tap a chip to fill Side A (cyan) then Side B (magenta);
   // tapping a selected chip clears that slot; both full → replace Side B.
   const pickGenre = (id) => {
+    if (disabledGenres[id]) return; // toggled-off genres aren't selectable
     if (sideA === id) setSideA('');
     else if (sideB === id) setSideB('');
     else if (!sideA) setSideA(id);
     else if (!sideB) setSideB(id);
     else setSideB(id);
+  };
+  // toggle a genre on/off (off = unavailable in the picker). Deselect it if it was a side.
+  const toggleGenre = (id) => {
+    const turningOff = !disabledGenres[id];
+    setDisabledGenres((d) => ({ ...d, [id]: turningOff }));
+    if (turningOff) {
+      if (sideA === id) setSideA('');
+      if (sideB === id) setSideB('');
+    }
   };
   const startRound = () => {
     if (!sideA || !sideB) { showToast('Pick two genres first', 'magenta'); return; }
@@ -280,45 +420,8 @@ function App() {
         </div>
 
         <div className="panels">
-          {/* ===== PANEL 1 — VIBE CARDS ===== */}
-          <div className="panel">
-            <div className="panel-head">
-              <div className="panel-num">PANEL 01</div>
-              <div className="panel-title">Vibe Cards</div>
-              <div className="panel-sub">Suggestions on the crowd's “Pick the Vibe” screen</div>
-            </div>
-            <div className="panel-body">
-              {cards.map((val, i) => {
-                const n = (vibeTally.counts && vibeTally.counts[i]) || 0;
-                const pct = vibeTally.total ? Math.round((n / vibeTally.total) * 100) : 0;
-                const live = vibeTally.total > 0;
-                return (
-                  <div className="vc-row" key={i} style={{ '--vcolor': VIBE_COLORS[i] }}>
-                    <div className="vc-field">
-                      <span className="vc-label">
-                        Card {i + 1}
-                        {live && <span className="vc-votes"> · {n} {n === 1 ? 'vote' : 'votes'} ({pct}%)</span>}
-                      </span>
-                      <input
-                        className="vc-input"
-                        value={val}
-                        maxLength={14}
-                        onChange={(e) => setCard(i, e.target.value)}
-                        placeholder="type a vibe…"
-                      />
-                      {live && <span className="vc-bar"><i style={{ width: pct + '%', background: VIBE_COLORS[i] }} /></span>}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="panel-foot">
-              <button className="push-btn" onClick={pushCards} disabled={filledCards === 0}
-                style={{ '--accent': '#00E5FF' }}>
-                Save / Push to crowd{filledCards ? ` · ${filledCards}/4` : ''}
-              </button>
-            </div>
-          </div>
+          {/* ===== PANEL 1 — PAST SETS (vibe-cards code retained above, unused) ===== */}
+          <PastSets />
 
           {/* ===== PANEL 2 — SESSION SETLIST ===== */}
           <Setlist />
@@ -336,15 +439,20 @@ function App() {
                 <span className="mu-vs">VS</span>
                 <span className="mu-b">{gB ? gB.emoji + ' ' + gB.name.toUpperCase() : 'PICK SIDE B'}</span>
               </div>
-              <div className="tg-hint">Tap two — 1st is <b className="hint-a">Side A</b>, 2nd is <b className="hint-b">Side B</b></div>
+              <div className="tg-hint">Tap to pick (<b className="hint-a">A</b> then <b className="hint-b">B</b>) · ⏻ toggles a genre off</div>
               <div className="tg-pick">
                 {GENRES.map((g) => {
                   const sel = sideA === g.id ? 'a' : sideB === g.id ? 'b' : '';
+                  const off = !!disabledGenres[g.id];
                   return (
-                    <button key={g.id} className={'tg-chip' + (sel ? ' sel-' + sel : '')} onClick={() => pickGenre(g.id)}>
+                    <div key={g.id} className={'tg-chip' + (sel ? ' sel-' + sel : '') + (off ? ' off' : '')}
+                      role="button" onClick={() => pickGenre(g.id)}>
                       <span className="tg-emoji">{g.emoji}</span><span className="tg-chip-name">{g.name}</span>
                       {sel && <span className="tg-badge">{sel.toUpperCase()}</span>}
-                    </button>
+                      <button className={'tg-toggle' + (off ? '' : ' on')}
+                        onClick={(e) => { e.stopPropagation(); toggleGenre(g.id); }}
+                        title={off ? 'Enable genre' : 'Disable genre'} aria-label="toggle genre">⏻</button>
+                    </div>
                   );
                 })}
               </div>

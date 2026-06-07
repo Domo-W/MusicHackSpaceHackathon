@@ -225,6 +225,8 @@ wss.on("connection", (ws) => {
           canSkip: msg.canSkip,
           song: msg.song,
           nextSong: msg.nextSong,
+          position: msg.position,
+          duration: msg.duration,
         };
         broadcast(playbackState);
         break;

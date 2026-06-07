@@ -110,6 +110,35 @@
     .lobby-meta b { color: var(--cyan); }
     .lj-wait { font-family: var(--mono); font-size: 15px; color: rgba(255,255,255,0.4); }
 
+    /* ---- BETWEEN SETS lobby hero + ambient aurora background ---- */
+    .lobby-cloud, .lobby-join { position: relative; z-index: 1; }
+    .lobby-hero { flex: 0 0 auto; display: flex; flex-direction: column; gap: 14px; }
+    .lobby-title {
+      font-family: var(--disp); font-weight: 700; font-size: 132px; line-height: 0.86;
+      letter-spacing: -0.02em; margin: 6px 0 0; text-transform: uppercase;
+      background: linear-gradient(118deg, var(--cyan) 0%, #fff 50%, var(--magenta) 100%);
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+    }
+    .lobby-tag { font-family: var(--disp); font-weight: 500; font-size: 26px; color: rgba(255,255,255,0.82); }
+    .lobby-steps { display: flex; gap: 22px; margin-top: 4px; flex-wrap: wrap; }
+    .lobby-steps span { font-family: var(--mono); font-size: 14px; letter-spacing: 0.03em; color: rgba(255,255,255,0.55); display: flex; align-items: center; gap: 8px; }
+    .lobby-steps b { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.18); color: var(--cyan); font-size: 11px; }
+    .name-cloud { position: relative; }
+    .lobby-aurora {
+      position: absolute; inset: -12%; z-index: 0; pointer-events: none; filter: blur(30px);
+      background:
+        radial-gradient(38% 46% at 22% 32%, rgba(0,229,255,0.22), transparent 62%),
+        radial-gradient(42% 52% at 78% 68%, rgba(255,26,140,0.22), transparent 62%),
+        radial-gradient(34% 40% at 62% 18%, rgba(120,90,255,0.16), transparent 60%),
+        radial-gradient(40% 44% at 30% 82%, rgba(0,229,255,0.10), transparent 60%);
+      animation: lobbyAurora 22s ease-in-out infinite alternate;
+    }
+    @keyframes lobbyAurora {
+      0%   { transform: scale(1) translate(0%, 0%); }
+      50%  { transform: scale(1.18) translate(2.5%, -2.5%); }
+      100% { transform: scale(1.08) translate(-2.5%, 2.5%); }
+    }
+
     /* ---- audio enable hint (one click anywhere unlocks sound) ---- */
     #audioGate {
       position: fixed; bottom: 18px; right: 24px; z-index: 95;
@@ -231,10 +260,21 @@
 
   <!-- LOBBY (phase idle): big scan-to-join while waiting for the DJ to start -->
   <div id="lobby">
+    <div class="lobby-aurora" aria-hidden="true"></div>
     <div class="lobby-cloud">
-      <div class="lobby-kicker"><i></i> LIVE — THE SHOW</div>
-      <div id="nameCloud" class="name-cloud"></div>
-      <div class="cloud-empty" id="cloudEmpty">the room is empty — scan to be the first in</div>
+      <div class="lobby-hero">
+        <div class="lobby-kicker"><i></i> LIVE — AUDIENCE-GENERATED SET</div>
+        <h1 class="lobby-title">BETWEEN<br />SETS</h1>
+        <div class="lobby-tag">Your words become the next song.</div>
+        <div class="lobby-steps">
+          <span><b>1</b> Scan the code</span>
+          <span><b>2</b> Name + “I want to…”</span>
+          <span><b>3</b> Vote the genre</span>
+        </div>
+      </div>
+      <div id="nameCloud" class="name-cloud">
+        <div class="cloud-empty" id="cloudEmpty">be the first in — scan to join</div>
+      </div>
     </div>
     <div class="lobby-join">
       <div class="lj-title">SCAN<br />TO JOIN</div>

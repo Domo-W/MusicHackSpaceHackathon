@@ -15,8 +15,9 @@
    ============================================================ */
 const { useState, useEffect, useRef, useCallback, useLayoutEffect } = React;
 
-const SEQ_NEW = ['name', 'vibe', 'intent', 'vote'];
-const SEQ_RETURNING = ['vibe', 'vote'];
+// Vibe ("Pick the Vibe") step removed from the flow for now (code kept, unused).
+const SEQ_NEW = ['name', 'intent', 'vote'];
+const SEQ_RETURNING = ['vote'];
 
 /* Map the backend `show_ended` payload (SavedSong[]) to the recap track shape
    ScreenRecap expects: {id,title,genre,by,dur,fileName,downloadUrl}. SavedSong

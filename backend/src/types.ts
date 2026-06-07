@@ -79,7 +79,7 @@ export type ClientMsg =
   | { type: "endVote" } // force the collecting round to resolve now (testing)
   | { type: "forceNext" } // force the stage to transition to the next song now
   | { type: "playbackControl"; action: "play" | "pause" } // dashboard → stage
-  | { type: "playbackState"; playing: boolean; canSkip: boolean; song?: Song; nextSong?: Song }; // stage → server
+  | { type: "playbackState"; playing: boolean; canSkip: boolean; song?: Song; nextSong?: Song; position?: number; duration?: number }; // stage → server
 
 // ---------------- server → clients ----------------
 export type ServerMsg =
@@ -120,5 +120,5 @@ export type ServerMsg =
   | { type: "show_ended"; songs: SavedSong[] } // set complete — recap playlist of saved songs
   | { type: "force_next" } // tell the stage to transition to the queued song now
   | { type: "playback_control"; action: "play" | "pause" } // dashboard command for stage
-  | { type: "playback_state"; playing: boolean; canSkip: boolean; song?: Song; nextSong?: Song } // stage state for dashboard
+  | { type: "playback_state"; playing: boolean; canSkip: boolean; song?: Song; nextSong?: Song; position?: number; duration?: number } // stage state for dashboard
   | ({ type: "show_state" } & ShowState); // authoritative backend flow state
