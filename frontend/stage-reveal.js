@@ -4,8 +4,9 @@
      - AudioEngine init + song_ready/song_final wiring (crossfade playback)
      - "generating" subtle ticker ("crafting <name>'s song…")
      - "round_result" BIG full-screen drop reveal (name · genre + intent)
+     - "song_ready" lyrics reveal overlay for the projector
      - the ▶ Start show user gesture (unblocks audio, sends {type:"start"})
-   Audience-typed strings (name, answer) are ALWAYS rendered with
+   Audience-typed strings (name, answer, lyrics-derived text) are ALWAYS rendered with
    .textContent — never innerHTML. See docs/client-api.md.
    ============================================================ */
 (function () {
@@ -31,7 +32,11 @@
     },
   });
 
-  Net.on("song_ready", function (m) { AudioEngine.ready(m.song); });
+  Net.on("song_ready", function (m) {
+    if (!m || !m.song) return;
+    AudioEngine.ready(m.song);
+    showLyricsReveal(m.song);
+  });
   Net.on("song_final", function (m) { AudioEngine.final(m.id, m.finalUrl); });
   Net.on("song_cancelled", function (m) { if (AudioEngine.cancel) AudioEngine.cancel(m.id); });
   Net.on("show_reset", function () { if (AudioEngine.reset) AudioEngine.reset(); });
@@ -45,6 +50,91 @@
   var ticker = document.getElementById("revealTicker");
   var reveal = document.getElementById("revealOverlay");
   var lobbyCount = document.getElementById("lobbyCount");
+  var revealTimer = null;
+
+  function clearRevealTimer() {
+    if (revealTimer) {
+      clearTimeout(revealTimer);
+      revealTimer = null;
+    }
+  }
+
+  function resetReveal(mode) {
+    if (!reveal) return false;
+    clearRevealTimer();
+    reveal.dataset.mode = mode || "drop";
+    reveal.textContent = "";
+    return true;
+  }
+
+  function armReveal(durationMs) {
+    if (!reveal) return;
+    reveal.dataset.on = "1";
+    reveal.style.animation = "none";
+    void reveal.offsetWidth; // reflow so re-triggered animation restarts
+    reveal.style.animation = "";
+    revealTimer = setTimeout(function () {
+      reveal.dataset.on = "0";
+      revealTimer = null;
+    }, durationMs);
+  }
+
+  function colorForSong(song) {
+    var color = "#00E5FF";
+    try {
+      var genre = String((song && song.genre) || "").toUpperCase();
+      var G = (Tug && Tug.GENRES) ? Tug.GENRES : null;
+      if (!G) return color;
+      Object.keys(G).some(function (key) {
+        var g = G[key];
+        if (g && String(g.name || "").toUpperCase() === genre && g.color) {
+          color = g.color;
+          return true;
+        }
+        return false;
+      });
+    } catch (e) {}
+    return color;
+  }
+
+  function showLyricsReveal(song) {
+    var lyrics = String((song && song.lyrics) || "").replace(/\r\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+    if (!lyrics || !resetReveal("lyrics")) return;
+
+    var color = colorForSong(song);
+    reveal.style.setProperty("--lyrics-accent", color);
+
+    var card = document.createElement("div");
+    card.className = "rv-card rv-lyrics";
+
+    var head = document.createElement("div");
+    head.className = "lyrics-head";
+
+    var kicker = document.createElement("div");
+    kicker.className = "lyrics-kicker";
+    kicker.textContent = "LYRICS READY";
+
+    var title = document.createElement("div");
+    title.className = "lyrics-title";
+    title.textContent = song.title || "UNTITLED";
+
+    var meta = document.createElement("div");
+    meta.className = "lyrics-meta";
+    var metaBits = [];
+    if (song.genre) metaBits.push(song.genre);
+    if (song.name) metaBits.push("FOR " + song.name);
+    meta.textContent = metaBits.join(" · ");
+
+    head.append(kicker, title, meta);
+
+    var body = document.createElement("pre");
+    body.className = "lyrics-body";
+    body.textContent = lyrics;
+
+    card.append(head, body);
+    reveal.append(card);
+    armReveal(10000);
+  }
 
   // ---- generating ticker: "crafting <name>'s song…" ----
   // Single shared timeout so rapid generating events don't stack.
@@ -71,9 +161,8 @@
   // ---- round_result: BIG full-screen drop reveal ----
   // Build all DOM with createElement + textContent. Single timeout handle so a
   // new reveal arriving mid-hold cleanly replaces the previous one.
-  var revealTimer = null;
   Net.on("round_result", function (m) {
-    if (!reveal) return;
+    if (!resetReveal("drop")) return;
 
     // genre accent color from the winning side, if we can resolve it
     var color = "#ffffff";
@@ -81,10 +170,6 @@
       var G = (Tug && Tug.GENRES) ? Tug.GENRES : null;
       if (G && m.winner && G[m.winner] && G[m.winner].color) color = G[m.winner].color;
     } catch (e) {}
-
-    // tear down any in-flight reveal
-    if (revealTimer) { clearTimeout(revealTimer); revealTimer = null; }
-    reveal.textContent = "";
 
     var card = document.createElement("div");
     card.className = "rv-card";
@@ -117,15 +202,7 @@
     reveal.append(card);
 
     // animate in → hold ~4s → fade out
-    reveal.dataset.on = "1";
-    reveal.style.animation = "none";
-    void reveal.offsetWidth; // reflow so re-triggered animation restarts
-    reveal.style.animation = "";
-
-    revealTimer = setTimeout(function () {
-      reveal.dataset.on = "0";
-      revealTimer = null;
-    }, 4600); // ~0.6s in + ~4s hold (fade-out handled by CSS transition)
+    armReveal(4600); // ~0.6s in + ~4s hold (fade-out handled by CSS transition)
   });
 
   // ---- LOBBY vs BATTLE: the show is started from the DASHBOARD now. Before the
@@ -176,6 +253,12 @@
   });
   Net.on("show_reset", function () {
     ended = false;
+    clearRevealTimer();
+    if (reveal) {
+      reveal.dataset.on = "0";
+      reveal.dataset.mode = "drop";
+      reveal.textContent = "";
+    }
     document.body.classList.remove("ended");
   });
 
