@@ -23,6 +23,7 @@ import {
   currentRecap,
 } from "./showMachine.js";
 import { join, remove, names } from "./participants.js";
+import * as vibes from "./vibes.js";
 import { songStore } from "./songStore.js";
 import type { ClientMsg, ServerMsg } from "./types.js";
 
@@ -108,13 +109,24 @@ setSender((msg: ServerMsg) => {
 
 // Track which participantId each socket owns, for crowdSize + disconnect cleanup.
 const wsParticipant = new WeakMap<WebSocket, string>();
+let wsSeq = 0; // stable per-socket id for the vibe tally (distinct phones per option)
+
+// Tally helpers shared by the vibe message + disconnect paths.
+const vibeTallyMsg = (): ServerMsg => {
+  const t = vibes.tally();
+  return { type: "vibe_tally", counts: t.counts, total: t.total };
+};
 
 wss.on("connection", (ws) => {
+  const socketId = ++wsSeq;
   console.log("[ws] client connected");
   // Seed the new client (e.g. a freshly-loaded stage) with the current names.
   ws.send(JSON.stringify({ type: "names", names: names() } as ServerMsg));
   ws.send(JSON.stringify(playbackState));
   ws.send(JSON.stringify({ type: "show_state", ...currentShowState() } as ServerMsg));
+  // Seed the current vibe poll (options + live tally) so a fresh phone renders it.
+  ws.send(JSON.stringify({ type: "vibe_options", cards: vibes.getCards() } as ServerMsg));
+  ws.send(JSON.stringify(vibeTallyMsg()));
   // If the set has already ended, seed this fresh connection with the recap so a
   // phone scanning the end-of-set QR lands on the playlist, not the lobby.
   const recap = currentRecap();
@@ -143,6 +155,15 @@ wss.on("connection", (ws) => {
         break;
       case "pull":
         handlePull(msg.participantId, msg.side, msg.impulse);
+        break;
+      case "vibe":
+        vibes.recordPick(socketId, msg.index);
+        broadcast(vibeTallyMsg());
+        break;
+      case "vibeCards":
+        vibes.setCards(msg.cards);
+        broadcast({ type: "vibe_options", cards: vibes.getCards() });
+        broadcast(vibeTallyMsg());
         break;
       case "playing":
         onPlaying(msg.id);
@@ -198,6 +219,8 @@ wss.on("connection", (ws) => {
       remove(id);
       wsParticipant.delete(ws);
     }
+    vibes.removeSocket(socketId);
+    broadcast(vibeTallyMsg());
     console.log("[ws] client disconnected");
   });
 });

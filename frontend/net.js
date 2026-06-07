@@ -14,7 +14,7 @@
   // React effects that mount after the socket already received the connect-time
   // seed). show_ended is sticky so a phone scanning the end-of-set QR still flips
   // to the recap even though its listener registers after the seeded message.
-  const stickyTypes = new Set(["show_state", "playback_state", "tug", "names", "show_ended"]);
+  const stickyTypes = new Set(["show_state", "playback_state", "tug", "names", "show_ended", "vibe_options", "vibe_tally"]);
   const lastMessages = new Map();
   let ws = null;
   let queue = [];

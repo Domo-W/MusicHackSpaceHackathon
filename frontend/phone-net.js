@@ -102,6 +102,17 @@
     }, 50);
   }
 
+  // ---- VIBE pick -> report the selected option index to the backend. ScreenVibe
+  //      renders the DJ's options as ordered `.vibe-card` buttons; the clicked
+  //      index IS the option index. Delegated so we never edit the partner screen.
+  document.addEventListener('click', function (e) {
+    const card = e.target && e.target.closest ? e.target.closest('.vibe-card') : null;
+    if (!card) return;
+    const cards = Array.prototype.slice.call(document.querySelectorAll('.vibe-card'));
+    const index = cards.indexOf(card);
+    if (index >= 0 && window.Net) window.Net.send({ type: 'vibe', index: index });
+  });
+
   /* ============================================================
      SEAM NOTE FOR THE LEAD (flagged, not silently patched):
 

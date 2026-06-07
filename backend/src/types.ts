@@ -63,6 +63,8 @@ export type ClientMsg =
   | { type: "join"; name: string }
   | { type: "answer"; participantId: string; text: string }
   | { type: "pull"; participantId: string; side: Side; impulse: number } // tug tap (batched client-side ~250ms)
+  | { type: "vibe"; index: number } // phone's current Pick-the-Vibe selection (option index)
+  | { type: "vibeCards"; cards: string[] } // dashboard: set the vibe-poll options
   // stage
   | { type: "playing"; id: string } // a song became the current track
   // dashboard control
@@ -83,6 +85,8 @@ export type ServerMsg =
   | { type: "joined"; participantId: string }
   | { type: "name"; name: string } // a participant just joined — add to the name cloud
   | { type: "names"; names: string[] } // full snapshot (sent on connect; cleared on reset)
+  | { type: "vibe_options"; cards: string[] } // the DJ's Pick-the-Vibe options (phones render these)
+  | { type: "vibe_tally"; counts: number[]; total: number } // live picks per option index
   // ~15Hz tug + crowd snapshot (the authoritative aggregate; clients render/integrate locally)
   | {
       type: "tug";

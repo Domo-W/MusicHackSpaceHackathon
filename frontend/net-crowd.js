@@ -43,13 +43,17 @@
     return 'rgb(255,26,140)';
   }
 
-  // ---- the four DJ-preloaded vibes (unchanged; ScreenVibe reads these) ----
+  // ---- the four DJ-preloaded vibes. ScreenVibe reads these; when the DJ pushes
+  //      real vibe cards (vibe_options) we rebuild this IN PLACE with their labels
+  //      keyed v0..v3, and feed the REAL tally into state.votes. ----
   const VIBES = [
     { key: 'dance',    label: 'DANCE',         color: '#00E5FF', sub: 'move your body' },
     { key: 'drink',    label: 'DRINK',         color: '#FF7A1A', sub: 'to the bar' },
     { key: 'flirt',    label: 'FLIRT',         color: '#FF1A8C', sub: 'shoot your shot' },
     { key: 'memories', label: 'MAKE MEMORIES', color: '#B65CFF', sub: 'tonight matters' },
   ];
+  const VIBE_COLORS = ['#00E5FF', '#FF7A1A', '#FF1A8C', '#B65CFF'];
+  let realOptions = false; // true once the DJ's options drive the poll (stop the sim chatter)
 
   // ---- crowd shout-out pool (NAME wall chatter) ----
   const WORD_POOL = [
@@ -112,6 +116,33 @@
     if (typeof msg.crowdSize === 'number') state.crowdSize = msg.crowdSize;
   }
 
+  // ---- DJ pushed real Pick-the-Vibe options: rebuild VIBES IN PLACE (keys v0..)
+  //      and reset votes to those keys. realOptions=true stops the sim chatter so
+  //      the phone shows the REAL tally, not random numbers. ----
+  function applyVibeOptions(cards) {
+    const labels = (cards || []).map((c) => String(c || '').trim()).filter(Boolean);
+    if (!labels.length) { realOptions = false; return; } // DJ cleared the poll → back to defaults
+    VIBES.length = 0;
+    const votes = {};
+    labels.forEach((label, i) => {
+      const key = 'v' + i;
+      VIBES.push({ key: key, label: label.toUpperCase(), color: VIBE_COLORS[i % VIBE_COLORS.length], sub: '' });
+      votes[key] = 0;
+    });
+    state.votes = votes;
+    realOptions = true;
+    emit('votes', state.votes);
+    emit('state', state);
+  }
+
+  // ---- live tally from the backend (distinct phones per option index) ----
+  function applyVibeTally(counts) {
+    if (!realOptions || !Array.isArray(counts)) return;
+    counts.forEach((n, i) => { state.votes['v' + i] = n; });
+    emit('votes', state.votes);
+    emit('state', state);
+  }
+
   // ---- main loop ----
   function frame(now) {
     if (!running) return;
@@ -133,7 +164,9 @@
     // light local chatter so the VIBE poll + NAME wall stay alive
     if (now - lastChatter > (820 / liveliness)) {
       lastChatter = now;
-      if (Math.random() < 0.85) {
+      // Random vote chatter only while the poll is the local sim. Once the DJ's
+      // real options are live, the tally comes from the backend — don't fake it.
+      if (!realOptions && Math.random() < 0.85) {
         const keys = Object.keys(state.votes);
         const total = keys.reduce((s, k) => s + state.votes[k], 0) || 1;
         let pick;
@@ -167,6 +200,8 @@
     if (running) return;
     running = true;
     window.Net.on('tug', onTug);
+    window.Net.on('vibe_options', function (m) { applyVibeOptions(m && m.cards); });
+    window.Net.on('vibe_tally', function (m) { applyVibeTally(m && m.counts); });
     lastBeat = lastStateEmit = lastFrameEmit = lastChatter = performance.now();
     requestAnimationFrame(frame);
   }

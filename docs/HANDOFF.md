@@ -118,6 +118,18 @@ layout) with the user's approval — coordinate with the partner before further 
   download), both driven by the real saved songs. Verified end-to-end.
 - ✅ **Dashboard redesign**: Name Cloud → first-class **Session Setlist** panel
   (download/delete/now-playing), fluid full-screen layout, redundant slide-out removed.
+- ✅ **Setlist numbering** matches the public recap (01…N, newest-first).
+- ✅ **DJ Set Opener** (Panel 03): freeform brief + Side A genre → generates song-1 from
+  a separate opener prompt (`craftOpenerPrompt`, welcomes the room, no name-chant) and
+  plays it immediately; round 1 collects for song 2. No cold-start silence.
+- ✅ **Recap reaches late scanners**: `endedRecap` held in showMachine + seeded on
+  connect; `show_ended` is sticky in net.js. A fresh phone scanning the end QR lands
+  on the recap. (`currentRecap()` / `net.js` stickyTypes.)
+- ✅ **Vibe full-loop** (`vibes.ts`): DJ vibe cards become the phone Pick-the-Vibe
+  options (`vibe_options`) AND a live dashboard tally (`vibe_tally`, distinct phones per
+  option, last-pick-per-socket). Phone display is driven by the REAL tally via
+  net-crowd (sim chatter gated when real options active). Picks captured via DOM
+  delegation in phone-net.js (no partner-file edit). Tally bars in dash.jsx Panel 01.
 
 ## Open / next
 

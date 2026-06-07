@@ -5,6 +5,7 @@ import { generateSong } from "./suno.js";
 import { songStore } from "./songStore.js";
 import { genreBpm } from "./tempo.js";
 import * as participants from "./participants.js";
+import * as vibes from "./vibes.js";
 import * as tug from "./tug.js";
 import type { GenreInfo, Phase, SavedSong, Seed, ShowState, Side, Song } from "./types.js";
 
@@ -132,9 +133,12 @@ export function reset(): void {
   }
   tug.reset(genreA, genreB);
   participants.reset();
+  vibes.reset();
   console.log("[show] reset → blank lobby");
   broadcast({ type: "show_reset" });
   broadcast({ type: "names", names: [] }); // clear the stage name cloud
+  broadcast({ type: "vibe_options", cards: [] }); // clear the vibe poll
+  broadcast({ type: "vibe_tally", counts: [], total: 0 });
   broadcastShowState();
   broadcastTug();
 }

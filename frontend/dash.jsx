@@ -64,6 +64,10 @@ const DASH_CSS = `
     border-radius: 10px; color: var(--text); font-family: var(--disp); font-size: 14px; outline: none; }
   .opener-input:focus { border-color: var(--magenta); }
   .opener-input::placeholder { color: var(--dim-2); }
+  /* live Pick-the-Vibe tally under each card */
+  .vc-votes { color: var(--cyan); font-weight: 700; letter-spacing: 0.02em; }
+  .vc-bar { display: block; margin-top: 7px; height: 5px; border-radius: 3px; background: rgba(255,255,255,0.08); overflow: hidden; }
+  .vc-bar i { display: block; height: 100%; border-radius: 3px; transition: width .4s ease; }
 `;
 
 /* ===== PANEL 02 — SESSION SETLIST =====
@@ -164,6 +168,14 @@ function App() {
     return () => clearInterval(id);
   }, []);
 
+  // live Pick-the-Vibe tally (real picks from phones, per card index)
+  const [vibeTally, setVibeTally] = useState({ counts: [], total: 0 });
+  useEffect(() => {
+    const N = window.Net;
+    if (!N || !N.on) return;
+    return N.on('vibe_tally', (m) => setVibeTally({ counts: (m && m.counts) || [], total: (m && m.total) || 0 }));
+  }, []);
+
   const showToast = (msg, color) => {
     setToast({ msg, color: color || '', show: true });
     if (toastTimer.current) clearTimeout(toastTimer.current);
@@ -212,25 +224,34 @@ function App() {
               <div className="panel-sub">Suggestions on the crowd's “Pick the Vibe” screen</div>
             </div>
             <div className="panel-body">
-              {cards.map((val, i) => (
-                <div className="vc-row" key={i} style={{ '--vcolor': VIBE_COLORS[i] }}>
-                  <div className="vc-field">
-                    <span className="vc-label">Card {i + 1}</span>
-                    <input
-                      className="vc-input"
-                      value={val}
-                      maxLength={14}
-                      onChange={(e) => setCard(i, e.target.value)}
-                      placeholder="type a vibe…"
-                    />
+              {cards.map((val, i) => {
+                const n = (vibeTally.counts && vibeTally.counts[i]) || 0;
+                const pct = vibeTally.total ? Math.round((n / vibeTally.total) * 100) : 0;
+                const live = vibeTally.total > 0;
+                return (
+                  <div className="vc-row" key={i} style={{ '--vcolor': VIBE_COLORS[i] }}>
+                    <div className="vc-field">
+                      <span className="vc-label">
+                        Card {i + 1}
+                        {live && <span className="vc-votes"> · {n} {n === 1 ? 'vote' : 'votes'} ({pct}%)</span>}
+                      </span>
+                      <input
+                        className="vc-input"
+                        value={val}
+                        maxLength={14}
+                        onChange={(e) => setCard(i, e.target.value)}
+                        placeholder="type a vibe…"
+                      />
+                      {live && <span className="vc-bar"><i style={{ width: pct + '%', background: VIBE_COLORS[i] }} /></span>}
+                    </div>
+                    <div className={'vc-chip' + (val.trim() ? '' : ' empty')}>
+                      {val.trim()
+                        ? (<React.Fragment><span className="vc-word">{val.trim()}</span><span className="vc-tiny">{live ? pct + '%' : 'PREVIEW'}</span></React.Fragment>)
+                        : (<span className="vc-word">EMPTY</span>)}
+                    </div>
                   </div>
-                  <div className={'vc-chip' + (val.trim() ? '' : ' empty')}>
-                    {val.trim()
-                      ? (<React.Fragment><span className="vc-word">{val.trim()}</span><span className="vc-tiny">PREVIEW</span></React.Fragment>)
-                      : (<span className="vc-word">EMPTY</span>)}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
             <div className="panel-foot">
               <button className="push-btn" onClick={pushCards} disabled={filledCards === 0}

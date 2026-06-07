@@ -86,14 +86,13 @@
         status("next round genres · " + msg.genreA.name + " vs " + msg.genreB.name);
       }
     } else if (channel === "vibe-cards" && Array.isArray(payload)) {
-      // No dedicated "question" field on the dashboard. Best-effort: use the
-      // first non-empty vibe card as the round question. (Flagged for lead.)
-      var q = payload.map(function (s) { return String(s == null ? "" : s).trim(); })
-        .filter(function (s) { return s.length; })[0];
-      if (q) {
-        Net.send({ type: "config", question: q });
-        status("config sent · question: " + q);
-      }
+      var trimmed = payload.map(function (s) { return String(s == null ? "" : s).trim(); });
+      // Drive the phone "Pick the Vibe" options + the live tally (full loop).
+      Net.send({ type: "vibeCards", cards: trimmed });
+      // Keep feeding the first card as the round question (back-compat).
+      var nonEmpty = trimmed.filter(function (s) { return s.length; });
+      if (nonEmpty[0]) Net.send({ type: "config", question: nonEmpty[0] });
+      status("vibe poll pushed · " + nonEmpty.length + " options");
     }
   }
 
