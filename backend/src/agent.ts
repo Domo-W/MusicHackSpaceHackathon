@@ -59,7 +59,10 @@ const STRUCTURE_TEMPLATE = `[Intro]
 [Outro]
 <name chant and one final hook fragment>`;
 
-function systemPrompt(seed: SongSeed, bpm: number): string {
+const STRICT_SANITIZE =
+  "- RETRY: a previous version was REJECTED by the music generator. Aggressively strip or replace ANY potentially-flagged content — profanity, slurs, sexual references, drugs, violence, hate, real public figures' names. Keep it 100% radio-clean and inoffensive while preserving the person's name and an upbeat party spirit.";
+
+function systemPrompt(seed: SongSeed, bpm: number, strict: boolean): string {
   return [
     "You are the live lyricist for 'Between Sets', a party where the crowd's answers become AI songs in real time.",
     "Turn ONE person's name + their 'I want to…' intent + a winning genre into a chantable, crowd-igniting party song.",
@@ -79,6 +82,7 @@ function systemPrompt(seed: SongSeed, bpm: number): string {
       : "",
     `- The 'style' field MUST start with "${seed.genre}, ${bpm} BPM, 4/4" followed by genre-appropriate production descriptors${seed.vibe ? ` that match a "${seed.vibe}" mood` : ""}.`,
     "- Keep it crowd-friendly: no slurs, hate, explicit sexual content, or targeted insults. If an intent is unsafe, transform it into something fun and inclusive (still keep the name).",
+    strict ? STRICT_SANITIZE : "",
     "Return ONLY the structured fields (title, lyrics, style).",
   ].filter(Boolean).join("\n");
 }
@@ -154,7 +158,7 @@ export interface OpenerSeed {
   genre: string; // the genre the opener should be in
 }
 
-function openerSystemPrompt(genre: string, bpm: number): string {
+function openerSystemPrompt(genre: string, bpm: number, strict: boolean): string {
   return [
     "You are the lyricist for the SET OPENER of 'Between Sets', a live party where the crowd's answers become AI songs.",
     "This is the VERY FIRST track of the night — it plays before anyone has submitted anything, to set the energy and welcome the room.",
@@ -170,8 +174,9 @@ function openerSystemPrompt(genre: string, bpm: number): string {
     "- Use these exact section tags: [Intro], [Chorus], [Verse 1], [Verse 2], [Outro] (repeat [Chorus] between verses). Aim for ~6–8 sections so it runs long enough.",
     `- The 'style' field MUST start with "${genre}, ${bpm} BPM, 4/4" followed by genre-appropriate production descriptors.`,
     "- Keep it crowd-friendly: no slurs, hate, explicit sexual content, or targeted insults. If the brief is unsafe, transform it into something fun and inclusive.",
+    strict ? STRICT_SANITIZE : "",
     "Return ONLY the structured fields (title, lyrics, style).",
-  ].join("\n");
+  ].filter(Boolean).join("\n");
 }
 
 /** Deterministic fallback opener if the LLM call fails or is too slow. */
@@ -197,14 +202,14 @@ export function templateOpener(seed: OpenerSeed): SongPrompt {
 }
 
 /** Craft a Suno prompt for the DJ's set opener. Falls back to a template on failure. */
-export async function craftOpenerPrompt(seed: OpenerSeed): Promise<SongPrompt> {
+export async function craftOpenerPrompt(seed: OpenerSeed, opts?: { strict?: boolean }): Promise<SongPrompt> {
   const genre = seed.genre || "House";
   const bpm = genreBpm(genre);
   try {
     const res = await client.messages.create({
       model: CONFIG.agentModel,
       max_tokens: 2048,
-      system: openerSystemPrompt(genre, bpm),
+      system: openerSystemPrompt(genre, bpm, opts?.strict ?? false),
       output_config: {
         format: { type: "json_schema", schema: SCHEMA },
         effort: "low",
@@ -234,14 +239,15 @@ export async function craftOpenerPrompt(seed: OpenerSeed): Promise<SongPrompt> {
   }
 }
 
-/** Craft a Suno prompt from the seed. Falls back to a template on any failure. */
-export async function craftSongPrompt(seed: SongSeed): Promise<SongPrompt> {
+/** Craft a Suno prompt from the seed. Falls back to a template on any failure.
+ *  `strict` aggressively sanitizes (used to retry after a Suno content rejection). */
+export async function craftSongPrompt(seed: SongSeed, opts?: { strict?: boolean }): Promise<SongPrompt> {
   const bpm = genreBpm(seed.genre);
   try {
     const res = await client.messages.create({
       model: CONFIG.agentModel,
       max_tokens: 2048,
-      system: systemPrompt(seed, bpm),
+      system: systemPrompt(seed, bpm, opts?.strict ?? false),
       // output_config.format constrains the response to our JSON schema.
       output_config: {
         format: { type: "json_schema", schema: SCHEMA },

@@ -45,6 +45,13 @@
   var ticker = document.getElementById("revealTicker");
   var reveal = document.getElementById("revealOverlay");
   var lobbyCount = document.getElementById("lobbyCount");
+  var voteFill = document.getElementById("voteFill");
+  var voteLbl = document.getElementById("voteLbl");
+  // stage.js sets the genre NAME text only once at init (when net-tug still holds
+  // its NU FUNK/NU SOUL defaults) and never refreshes it — so we keep the names in
+  // sync with the backend genres live here.
+  var tecName = document.getElementById("tecName");
+  var dscName = document.getElementById("dscName");
 
   // ---- generating ticker: "crafting <name>'s song…" ----
   // Single shared timeout so rapid generating events don't stack.
@@ -118,12 +125,14 @@
 
     // animate in → hold ~4s → fade out
     reveal.dataset.on = "1";
+    document.body.classList.add("revealing"); // hide the background text/readouts
     reveal.style.animation = "none";
     void reveal.offsetWidth; // reflow so re-triggered animation restarts
     reveal.style.animation = "";
 
     revealTimer = setTimeout(function () {
       reveal.dataset.on = "0";
+      document.body.classList.remove("revealing"); // bring the text back
       revealTimer = null;
     }, 4600); // ~0.6s in + ~4s hold (fade-out handled by CSS transition)
   });
@@ -195,6 +204,24 @@
     var isLobby = m.phase === "idle";
     document.body.classList.toggle("lobby", isLobby);
     if (lobbyCount && typeof m.crowdSize === "number") lobbyCount.textContent = m.crowdSize;
+
+    // Keep the genre names in sync (stage.js only sets them once, at init).
+    if (m.genres) {
+      if (tecName && m.genres.A) tecName.textContent = m.genres.A.name;
+      if (dscName && m.genres.B) dscName.textContent = m.genres.B.name;
+    }
+
+    // Vote countdown meter (replaces CROWD HYPE): a depleting bar + "Ns left".
+    if (voteFill && voteLbl) {
+      if (m.phase === "collecting" && m.timeTotal > 0) {
+        var frac = Math.max(0, Math.min(1, m.timeRemaining / m.timeTotal));
+        voteFill.style.width = (frac * 100).toFixed(1) + "%";
+        voteLbl.textContent = "VOTE — " + Math.ceil(m.timeRemaining) + "S LEFT";
+      } else {
+        voteFill.style.width = "0%";
+        voteLbl.textContent = m.phase === "playing" ? "NEXT VOTE SOON" : "GET READY TO VOTE";
+      }
+    }
   });
 
   // ---- LIVE NAME CLOUD: grows as people submit their name ----

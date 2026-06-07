@@ -41,6 +41,7 @@
     membersA: 0, membersB: 0,
     round: 1, bestOf: 1,    // collapse best-of-3 -> one timed round
     scoreA: 0, scoreB: 0,
+    timeRemaining: 0, timeTotal: 0, // vote countdown (seconds left / full window)
     phase: 'battle',        // prototype vocabulary: 'battle' | 'sudden' | 'win'
     winner: null, winIsMatch: false,
     suddenSide: null, suddenRemain: 0,
@@ -94,6 +95,9 @@
     if (typeof msg.membersA === 'number') state.membersA = msg.membersA;
     if (typeof msg.membersB === 'number') state.membersB = msg.membersB;
     if (typeof msg.round === 'number') state.round = msg.round;
+    if (typeof msg.timeRemaining === 'number') state.timeRemaining = msg.timeRemaining;
+    if (typeof msg.timeTotal === 'number') state.timeTotal = msg.timeTotal;
+    state.collecting = msg.phase === 'collecting';
     // While a round_result win flash is showing we keep phase='win' so the
     // banner stays up; otherwise normal snapshots are the 'battle' phase.
     if (state.phase !== 'win') {

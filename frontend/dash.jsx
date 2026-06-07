@@ -68,6 +68,60 @@ const DASH_CSS = `
   .vc-votes { color: var(--cyan); font-weight: 700; letter-spacing: 0.02em; }
   .vc-bar { display: block; margin-top: 7px; height: 5px; border-radius: 3px; background: rgba(255,255,255,0.08); overflow: hidden; }
   .vc-bar i { display: block; height: 100%; border-radius: 3px; transition: width .4s ease; }
+
+  /* ---- tighter density so panels fit without scrolling (setlist may still scroll) ---- */
+  .dash-head { height: 54px; }
+  .panels { gap: 16px; padding: 14px 22px 18px; }
+  .panel-head { padding: 11px 18px 8px; }
+  .panel-title { font-size: 16px; margin-top: 2px; }
+  .panel-sub { font-size: 9.5px; margin-top: 3px; }
+  .panel-body { padding: 12px 16px; gap: 8px; }
+  .panel-foot { padding: 9px 16px 11px; }
+  .push-btn { min-height: 40px; font-size: 12px; }
+  /* vibe cards */
+  .vc-row { gap: 0; grid-template-columns: 1fr; }
+  .vc-field { gap: 4px; }
+  .vc-label { font-size: 9px; }
+  .vc-input { height: 36px; font-size: 13px; border-radius: 8px; }
+  .vc-chip { min-height: 36px; }
+  .vc-chip .vc-word { font-size: 12px; }
+  /* tug genres — shrink so all 8 fit without scrolling */
+  .tg-matchup { margin-bottom: 7px; }
+  .tg-matchup .mu-a, .tg-matchup .mu-b { font-size: 15px; }
+  .tg-matchup .mu-vs { font-size: 11px; }
+  .tg-col-head { font-size: 9px; padding-bottom: 5px; }
+  .tg-cols { gap: 10px; }
+  .tg-list { gap: 3px; overflow: visible; padding-right: 0; }
+  .tg-opt { padding: 4px 9px; font-size: 11.5px; gap: 6px; border-radius: 7px; }
+  .tg-opt .tg-emoji { font-size: 13px; }
+  /* single-grid genre picker (replaces the two duplicate columns) */
+  .tg-hint { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.05em; color: var(--dim); margin-bottom: 9px; }
+  .tg-hint .hint-a { color: var(--cyan); }
+  .tg-hint .hint-b { color: var(--magenta); }
+  .tg-pick { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+  .tg-chip { display: flex; align-items: center; gap: 8px; padding: 8px 11px; border-radius: 9px;
+    background: var(--surface-2); border: 1.5px solid var(--line); color: var(--text);
+    font-family: var(--disp); font-weight: 600; font-size: 13px; text-align: left; min-width: 0;
+    transition: border-color .12s, background .12s, color .12s; }
+  .tg-chip .tg-emoji { font-size: 15px; flex: none; }
+  .tg-chip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tg-chip:hover { background: var(--surface-3); }
+  .tg-chip.sel-a { border-color: var(--cyan); color: var(--cyan); background: color-mix(in srgb, var(--cyan) 13%, var(--surface-2)); }
+  .tg-chip.sel-b { border-color: var(--magenta); color: var(--magenta); background: color-mix(in srgb, var(--magenta) 13%, var(--surface-2)); }
+  .tg-badge { margin-left: auto; flex: none; font-family: var(--mono); font-weight: 700; font-size: 9px;
+    padding: 1px 6px; border-radius: 999px; background: currentColor; }
+  .tg-chip.sel-a .tg-badge { color: #061018; }
+  .tg-chip.sel-b .tg-badge { color: #0A0A0F; }
+  /* opener field */
+  .opener-field { margin-bottom: 7px; gap: 4px; }
+  .opener-label { font-size: 8.5px; }
+  .opener-input { height: 34px; font-size: 12px; }
+  /* ---- blended, subtle scrollbars ---- */
+  #dashRoot ::-webkit-scrollbar { width: 6px; height: 6px; }
+  #dashRoot ::-webkit-scrollbar-track { background: transparent; }
+  #dashRoot ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.07); border-radius: 999px; }
+  #dashRoot ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.16); }
+  #dashRoot * { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.12) transparent; }
 `;
 
 /* ===== PANEL 02 — SESSION SETLIST =====
@@ -148,7 +202,9 @@ function Setlist() {
 }
 
 function App() {
-  const [cards, setCards] = useState(['', '', '', '']);
+  // Pre-filled with the phone's default Pick-the-Vibe options so the dashboard and
+  // crowd screen are visibly in sync from the start (edit + push to change them).
+  const [cards, setCards] = useState(['DANCE', 'DRINK', 'FLIRT', 'MAKE MEMORIES']);
   const [opener, setOpener] = useState(''); // optional first-song (opener) brief
   const [sideA, setSideA] = useState('soca');
   const [sideB, setSideB] = useState('afrobeats');
@@ -191,9 +247,17 @@ function App() {
   const filledCards = cards.filter((c) => c.trim()).length;
 
   // ---- Panel 3 actions ----
-  const pickA = (id) => { if (id !== sideB) setSideA(id); };
-  const pickB = (id) => { if (id !== sideA) setSideB(id); };
+  // Single-grid picker: tap a chip to fill Side A (cyan) then Side B (magenta);
+  // tapping a selected chip clears that slot; both full → replace Side B.
+  const pickGenre = (id) => {
+    if (sideA === id) setSideA('');
+    else if (sideB === id) setSideB('');
+    else if (!sideA) setSideA(id);
+    else if (!sideB) setSideB(id);
+    else setSideB(id);
+  };
   const startRound = () => {
+    if (!sideA || !sideB) { showToast('Pick two genres first', 'magenta'); return; }
     pushToCrowd('tug-genres', { sideA, sideB, opener: opener.trim() });
     showToast(opener.trim() ? 'Opener + genres sent ✓' : 'Genres sent ✓', 'magenta');
   };
@@ -244,11 +308,6 @@ function App() {
                       />
                       {live && <span className="vc-bar"><i style={{ width: pct + '%', background: VIBE_COLORS[i] }} /></span>}
                     </div>
-                    <div className={'vc-chip' + (val.trim() ? '' : ' empty')}>
-                      {val.trim()
-                        ? (<React.Fragment><span className="vc-word">{val.trim()}</span><span className="vc-tiny">{live ? pct + '%' : 'PREVIEW'}</span></React.Fragment>)
-                        : (<span className="vc-word">EMPTY</span>)}
-                    </div>
                   </div>
                 );
               })}
@@ -273,40 +332,26 @@ function App() {
             </div>
             <div className="panel-body">
               <div className="tg-matchup">
-                <span className="mu-a">{gA.emoji} {gA.name.toUpperCase()}</span>
+                <span className="mu-a">{gA ? gA.emoji + ' ' + gA.name.toUpperCase() : 'PICK SIDE A'}</span>
                 <span className="mu-vs">VS</span>
-                <span className="mu-b">{gB.emoji} {gB.name.toUpperCase()}</span>
+                <span className="mu-b">{gB ? gB.emoji + ' ' + gB.name.toUpperCase() : 'PICK SIDE B'}</span>
               </div>
-              <div className="tg-cols">
-                <div className="tg-col a">
-                  <div className="tg-col-head">● Side A</div>
-                  <div className="tg-list">
-                    {GENRES.map((g) => (
-                      <button key={g.id}
-                        className={'tg-opt' + (sideA === g.id ? ' sel' : '') + (sideB === g.id ? ' disabled' : '')}
-                        onClick={() => pickA(g.id)} disabled={sideB === g.id}>
-                        <span className="tg-emoji">{g.emoji}</span>{g.name}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="tg-col b">
-                  <div className="tg-col-head">● Side B</div>
-                  <div className="tg-list">
-                    {GENRES.map((g) => (
-                      <button key={g.id}
-                        className={'tg-opt' + (sideB === g.id ? ' sel' : '') + (sideA === g.id ? ' disabled' : '')}
-                        onClick={() => pickB(g.id)} disabled={sideA === g.id}>
-                        <span className="tg-emoji">{g.emoji}</span>{g.name}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+              <div className="tg-hint">Tap two — 1st is <b className="hint-a">Side A</b>, 2nd is <b className="hint-b">Side B</b></div>
+              <div className="tg-pick">
+                {GENRES.map((g) => {
+                  const sel = sideA === g.id ? 'a' : sideB === g.id ? 'b' : '';
+                  return (
+                    <button key={g.id} className={'tg-chip' + (sel ? ' sel-' + sel : '')} onClick={() => pickGenre(g.id)}>
+                      <span className="tg-emoji">{g.emoji}</span><span className="tg-chip-name">{g.name}</span>
+                      {sel && <span className="tg-badge">{sel.toUpperCase()}</span>}
+                    </button>
+                  );
+                })}
               </div>
             </div>
             <div className="panel-foot">
               <div className="opener-field">
-                <span className="opener-label">First song · opener brief <i>(optional — plays in {gA.name})</i></span>
+                <span className="opener-label">First song · opener brief <i>(optional — plays in {gA ? gA.name : 'Side A genre'})</i></span>
                 <input
                   className="opener-input"
                   value={opener}

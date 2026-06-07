@@ -1,9 +1,7 @@
-import { nextSeed } from "./seeds.js";
-
 // Participant store. Tracks everyone who has joined, plus the INTENT answer each
 // gave for the CURRENT collecting round. At the buzzer one of the people who
-// answered this round is chosen at random. Falls back to a sample seed (name +
-// answer only) if nobody answered, so dry-runs still resolve a round.
+// answered this round is chosen at random. Returns null if NOBODY has answered,
+// so the show can skip generation instead of inventing a fake song.
 
 interface Participant {
   id: string;
@@ -67,14 +65,11 @@ export function names(): string[] {
  * small group gets variety. Falls back to a sample seed only if NOBODY has ever
  * answered, so dry-runs still resolve.
  */
-export function selectRandomAnswerer(): { name: string; answer: string } {
+export function selectRandomAnswerer(): { name: string; answer: string } | null {
   const answered = [...byId.values()].filter(
     (p): p is Participant & { answer: string } => p.answer !== null && p.answer.length > 0,
   );
-  if (answered.length === 0) {
-    const s = nextSeed(); // genre stripped by caller — only name + answer used here
-    return { name: s.name, answer: s.answer };
-  }
+  if (answered.length === 0) return null; // nobody submitted — caller skips generation
   // Avoid repeating the immediately-previous selection when there's a choice.
   const fresh = answered.length > 1 ? answered.filter((p) => p.id !== lastSelectedId) : answered;
   const choices = fresh.length > 0 ? fresh : answered;

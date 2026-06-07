@@ -122,26 +122,42 @@
 
     /* SCAN TO JOIN — persistent QR so phones on the same WiFi can join */
     #joinPanel {
-      position: fixed; top: 24px; right: 24px; z-index: 70;
-      display: flex; flex-direction: column; align-items: center; gap: 10px;
-      padding: 18px 18px 14px; border-radius: 20px;
+      position: fixed; bottom: 24px; right: 24px; z-index: 70;
+      display: flex; flex-direction: column; align-items: center; gap: 7px;
+      padding: 12px 12px 9px; border-radius: 16px;
       background: rgba(8,8,14,0.72); border: 1px solid rgba(255,255,255,0.14);
       backdrop-filter: blur(8px); box-shadow: 0 0 44px rgba(0,0,0,0.55);
     }
     #joinPanel .jp-k {
-      font-family: var(--mono); font-weight: 700; font-size: 17px; letter-spacing: 0.22em;
+      font-family: var(--mono); font-weight: 700; font-size: 12px; letter-spacing: 0.2em;
       color: var(--cyan); text-transform: uppercase;
     }
-    #joinPanel .jp-qr { width: 208px; height: 208px; background: #fff; border-radius: 12px; padding: 9px; box-sizing: border-box; }
+    #joinPanel .jp-qr { width: 132px; height: 132px; background: #fff; border-radius: 9px; padding: 7px; box-sizing: border-box; }
     #joinPanel .jp-qr img { width: 100%; height: 100%; display: block; }
-    #joinPanel .jp-url { font-family: var(--mono); font-size: 13px; color: rgba(255,255,255,0.66); }
+    #joinPanel .jp-url { font-family: var(--mono); font-size: 10px; color: rgba(255,255,255,0.6); }
+
+    /* ---- vote countdown meter (replaces the CROWD HYPE fill) ---- */
+    #hypeFill { display: none; }            /* stage.js still writes it, hidden */
+    #voteFill { width: 0%; }                /* driven by stage-reveal.js from timeRemaining */
+
+    /* ---- full-screen background: canvas covers the viewport (no letterbox bars),
+       overlay stays 16:9-centered on top. ---- */
+    #bf { position: fixed; inset: 0; width: 100vw; height: 100vh; object-fit: cover; z-index: 0; }
+    #viewport { z-index: 1; }
+    #stageRoot { background: transparent !important; }
+
+    /* ---- while the "next up" reveal overlay is up, hide the battle text so it
+       doesn't show through; it fades back when the reveal clears. ---- */
+    .overlay { transition: opacity .35s ease; }
+    body.revealing .overlay { opacity: 0; }
   </style>
 </head>
 <body class="lobby">
+  <!-- battlefront canvas lives OUTSIDE the scaled #stageRoot so it covers the
+       full screen (no letterbox bars); the overlay below stays 16:9-centered. -->
+  <canvas id="bf"></canvas>
   <div id="viewport">
     <div id="stageRoot">
-      <canvas id="bf"></canvas>
-
       <div class="overlay">
         <header class="st-head">
           <span class="st-live"><i class="st-dot"></i>LIVE — THE SHOW</span>
@@ -165,9 +181,10 @@
           <span class="score" id="score"></span>
         </div>
 
-        <div class="hype">
-          <span class="hype-lbl">CROWD HYPE</span>
-          <div class="hype-bar"><i id="hypeFill"></i></div>
+        <div class="hype" id="voteMeter">
+          <span class="hype-lbl" id="voteLbl">TIME TO VOTE</span>
+          <!-- #hypeFill stays for stage.js (hidden); #voteFill is our countdown -->
+          <div class="hype-bar"><i id="hypeFill"></i><i id="voteFill"></i></div>
         </div>
 
         <div class="sudden-stage" id="sudden" data-on="0"></div>

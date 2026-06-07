@@ -101,6 +101,7 @@ export type ServerMsg =
       membersA: number; // participants currently pulling each side
       membersB: number;
       timeRemaining: number; // seconds left in collecting (0 otherwise)
+      timeTotal: number; // the full collect window in seconds (for a countdown bar)
       crowdSize: number;
       energy: number; // 0..1
       bpm: number;

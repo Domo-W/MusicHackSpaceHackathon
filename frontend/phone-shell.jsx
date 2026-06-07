@@ -315,8 +315,20 @@ function VoteScreen() {
     );
   };
 
+  const tr = t.timeRemaining || 0;
+  const tt = t.timeTotal || 0;
+  const collecting = !!t.collecting;
+  const timeFrac = tt > 0 ? Math.max(0, Math.min(1, tr / tt)) : 0;
+
   return (
     <div className="screen votescreen">
+      <div className="vs-timer">
+        <div className="vs-timer-head">
+          <span>{collecting ? 'VOTE ENDS IN' : 'GET READY'}</span>
+          {collecting && <span className="vs-timer-num">{Math.ceil(tr)}s</span>}
+        </div>
+        <div className="vs-timer-bar"><i style={{ width: (timeFrac * 100) + '%' }} /></div>
+      </div>
       <div className="vs-kicker">TAP OR HOLD TO PULL YOUR GENRE</div>
       <div className="vs-grid">{btn('A')}{btn('B')}</div>
     </div>

@@ -195,6 +195,10 @@ export function startShow(opener?: { prompt: string; genre: string }): void {
  * ahead. This is the round boundary where we reset tug + answers.
  */
 export function onPlaying(id: string): void {
+  // If the show isn't running (e.g. after reset/end), ignore stray "playing"
+  // reports from a stage still looping audio — otherwise the round keeps
+  // advancing and generating forever (zombie loop).
+  if (!started) return;
   if (id === lastPlayingId) return;
   lastPlayingId = id;
   currentBpm = songBpms.get(id) ?? currentBpm;
@@ -313,6 +317,17 @@ function beginCollecting(): void {
   broadcastShowState();
 }
 
+/** Re-open the current round's vote window (no round bump) — used when a buzzer
+ *  fires with no submissions, so the show waits for the crowd without churning. */
+function extendCollecting(): void {
+  phase = "collecting";
+  collectEndsAt = Date.now() + collectSeconds * 1000;
+  if (buzzerTimer) clearTimeout(buzzerTimer);
+  buzzerTimer = setTimeout(onBuzzer, collectSeconds * 1000);
+  startTugLoop();
+  broadcastShowState();
+}
+
 function startTugLoop(): void {
   if (tugLoop) return;
   tugLoop = setInterval(() => {
@@ -337,6 +352,7 @@ function broadcastTug(): void {
     membersA: s.membersA,
     membersB: s.membersB,
     timeRemaining,
+    timeTotal: collectSeconds,
     crowdSize: participants.count(),
     energy: s.energy,
     bpm: currentBpm,
@@ -353,9 +369,17 @@ function onBuzzer(): void {
 
 /** Resolve the tug winner + selected participant, then run the pipeline. */
 function resolveAndGenerate(): void {
+  const picked = participants.selectRandomAnswerer();
+  if (!picked) {
+    // Nobody submitted an intent — don't invent a song. Re-open the SAME round's
+    // vote window (no round bump / genre churn) until someone submits.
+    console.log(`[show] round ${roundIndex} → no submissions; waiting for the crowd`);
+    extendCollecting();
+    return;
+  }
   const winnerSide: Side = tug.winner();
   const genre = winnerSide === "A" ? genreA.name : genreB.name;
-  const { name, answer } = participants.selectRandomAnswerer();
+  const { name, answer } = picked;
   const vibe = vibes.winner() ?? undefined; // the crowd's winning Pick-the-Vibe mood
 
   broadcast({ type: "round_result", winner: winnerSide, genre, name, answer, roundIndex });
@@ -412,60 +436,71 @@ async function generateNext(seed: Seed, opts?: { opener?: boolean }): Promise<vo
     broadcast({ type: "generation_failed", id, message: generationError });
   };
 
+  const song: Song = {
+    id,
+    title: "",
+    name: seed.name,
+    genre: seed.genre,
+    bpm,
+    lyrics: "",
+    streamUrl: "",
+    finalUrl: "",
+  };
+
+  const onPlayable = (url: string) => {
+    if (!isCurrentJob()) return;
+    playableSent = true;
+    song.streamUrl = url;
+    console.log(`[show] ${id}: playable (streaming) → sending to stage; gate released`);
+    broadcast({ type: "song_ready", song: { ...song } });
+    releaseGate(); // next round may begin now
+  };
+
+  const onComplete = async (result: { finalUrl: string; msToComplete: number }) => {
+    if (!isCurrentJob()) return;
+    song.finalUrl = result.finalUrl;
+    broadcast({ type: "song_final", id, finalUrl: result.finalUrl });
+    console.log(`[show] ${id}: complete in ${(result.msToComplete / 1000).toFixed(1)}s`);
+    try {
+      const saved = await songStore.save(song, result.finalUrl);
+      broadcast({ type: "song_saved", song: saved });
+      console.log(`[show] ${id}: saved as ${saved.fileName}`);
+    } catch (err) {
+      console.error(`[show] ${id}: save failed —`, (err as Error).message);
+    }
+  };
+
+  // Craft lyrics + generate. If Suno REJECTS before the song is playable (e.g. a
+  // flagged word slipped through), re-craft with an aggressive sanitize and retry
+  // ONCE before giving up.
+  const runAttempt = async (strict: boolean): Promise<void> => {
+    const prompt = opts?.opener
+      ? await craftOpenerPrompt({ prompt: seed.answer, genre: seed.genre }, { strict })
+      : await craftSongPrompt(seed, { strict });
+    console.log(`[show] ${id}: ${strict ? "sanitized retry — " : ""}style → ${prompt.style}`);
+    song.title = prompt.title;
+    song.lyrics = prompt.lyrics;
+    return generateSong(prompt, { onPlayable })
+      .then(onComplete)
+      .catch((err) => {
+        if (!isCurrentJob() || playableSent) return;
+        if (!strict) {
+          console.warn(`[show] ${id}: Suno rejected — re-crafting (sanitized) + retrying once: ${(err as Error).message}`);
+          return runAttempt(true);
+        }
+        throw err;
+      });
+  };
+
   try {
     broadcast({ type: "generating", seed, roundIndex });
     console.log(`[show] ${id}: crafting ${opts?.opener ? "OPENER" : "lyrics"} for ${seed.name} / ${seed.genre}`);
-    const prompt = opts?.opener
-      ? await craftOpenerPrompt({ prompt: seed.answer, genre: seed.genre })
-      : await craftSongPrompt(seed);
-    console.log(`[show] ${id}: style → ${prompt.style}`);
-
-    const song: Song = {
-      id,
-      title: prompt.title,
-      name: seed.name,
-      genre: seed.genre,
-      bpm,
-      lyrics: prompt.lyrics,
-      streamUrl: "",
-      finalUrl: "",
-    };
-
-    // Fire the generation; release the gate the moment it's playable.
-    generateSong(prompt, {
-      onPlayable: (url) => {
-        if (!isCurrentJob()) return;
-        playableSent = true;
-        song.streamUrl = url;
-        console.log(`[show] ${id}: playable (streaming) → sending to stage; gate released`);
-        broadcast({ type: "song_ready", song: { ...song } });
-        releaseGate(); // next round may begin now
-      },
-    })
-      .then(async (result) => {
-        if (!isCurrentJob()) return;
-        song.finalUrl = result.finalUrl;
-        broadcast({ type: "song_final", id, finalUrl: result.finalUrl });
-        console.log(`[show] ${id}: complete in ${(result.msToComplete / 1000).toFixed(1)}s`);
-        try {
-          const saved = await songStore.save(song, result.finalUrl);
-          broadcast({ type: "song_saved", song: saved });
-          console.log(`[show] ${id}: saved locally as ${saved.fileName}`);
-        } catch (err) {
-          console.error(`[show] ${id}: local save failed —`, (err as Error).message);
-        }
-      })
-      .catch((err) => {
-        if (isCurrentJob()) {
-          console.error(`[show] ${id}: generation failed —`, (err as Error).message);
-          failGeneration(err);
-        }
-      })
-      .finally(releaseGate); // safety: release if it errored before playable
+    await runAttempt(false);
   } catch (err) {
-    console.error(`[show] ${id}: prompt failed —`, (err as Error).message);
+    console.error(`[show] ${id}: generation failed —`, (err as Error).message);
     failGeneration(err);
-    releaseGate();
+  } finally {
+    releaseGate(); // safety: release if it errored before playable
   }
 }
 
