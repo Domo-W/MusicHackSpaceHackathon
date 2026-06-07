@@ -10,7 +10,11 @@
 
   const listeners = new Map(); // type -> Set<fn>
   const anyListeners = new Set();
-  const stickyTypes = new Set(["show_state", "playback_state", "tug", "names"]);
+  // Sticky types replay their latest value to listeners that subscribe late (e.g.
+  // React effects that mount after the socket already received the connect-time
+  // seed). show_ended is sticky so a phone scanning the end-of-set QR still flips
+  // to the recap even though its listener registers after the seeded message.
+  const stickyTypes = new Set(["show_state", "playback_state", "tug", "names", "show_ended"]);
   const lastMessages = new Map();
   let ws = null;
   let queue = [];
@@ -40,6 +44,9 @@
       let msg;
       try { msg = JSON.parse(e.data); } catch (err) { return; }
       if (stickyTypes.has(msg.type)) lastMessages.set(msg.type, msg);
+      // A reset means any held recap is stale — drop it so a late subscriber
+      // doesn't replay an old "set complete" over a fresh show.
+      if (msg.type === "show_reset") lastMessages.delete("show_ended");
       emit(msg.type, msg);
       anyListeners.forEach((fn) => { try { fn(msg); } catch (err) {} });
     };

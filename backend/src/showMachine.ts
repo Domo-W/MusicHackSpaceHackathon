@@ -57,6 +57,10 @@ let generationError: string | undefined;
 let genreSource: "auto" | "dj" = "auto";
 let autoGenrePairIndex = 0;
 let pendingGenreOverride: { A: GenreInfo; B: GenreInfo } | null = null;
+// When the show has ended, the recap playlist is held here so a phone that scans
+// the end-of-set QR FRESH (a new connection) can still be shown the recap. Cleared
+// on reset and when a new collecting round begins (the set is live again).
+let endedRecap: SavedSong[] | null = null;
 const songBpms = new Map<string, number>();
 
 let collectEndsAt = 0; // epoch ms when the current collecting window buzzes
@@ -92,6 +96,11 @@ export function currentShowState(): ShowState {
   };
 }
 
+/** The recap playlist if the show has ended (else null) — to seed late scanners. */
+export function currentRecap(): SavedSong[] | null {
+  return endedRecap;
+}
+
 function broadcastShowState(): void {
   broadcast({ type: "show_state", ...currentShowState() });
 }
@@ -114,6 +123,7 @@ export function reset(): void {
   genreSource = "auto";
   autoGenrePairIndex = 0;
   pendingGenreOverride = null;
+  endedRecap = null;
   genreA = { ...AUTO_GENRE_PAIRS[0]!.A };
   genreB = { ...AUTO_GENRE_PAIRS[0]!.B };
   if (buzzerTimer) {
@@ -149,6 +159,7 @@ export async function endShow(): Promise<void> {
   } catch (err) {
     console.error("[show] endShow — could not list saved songs:", (err as Error).message);
   }
+  endedRecap = songs; // seed late scanners (new connections) with the recap
   console.log(`[show] ended — broadcasting recap (${songs.length} tracks)`);
   broadcast({ type: "show_ended", songs });
   broadcastTug();
@@ -285,6 +296,7 @@ function beginCollecting(): void {
     participants.clearRound();
   }
   phase = "collecting";
+  endedRecap = null; // a new round means the set is live again, not in recap
   activeSeed = undefined;
   generationError = undefined;
   collectEndsAt = Date.now() + collectSeconds * 1000;

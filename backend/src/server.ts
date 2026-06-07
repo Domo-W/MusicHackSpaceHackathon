@@ -20,6 +20,7 @@ import {
   handlePull,
   handleAnswer,
   currentShowState,
+  currentRecap,
 } from "./showMachine.js";
 import { join, remove, names } from "./participants.js";
 import { songStore } from "./songStore.js";
@@ -114,6 +115,10 @@ wss.on("connection", (ws) => {
   ws.send(JSON.stringify({ type: "names", names: names() } as ServerMsg));
   ws.send(JSON.stringify(playbackState));
   ws.send(JSON.stringify({ type: "show_state", ...currentShowState() } as ServerMsg));
+  // If the set has already ended, seed this fresh connection with the recap so a
+  // phone scanning the end-of-set QR lands on the playlist, not the lobby.
+  const recap = currentRecap();
+  if (recap) ws.send(JSON.stringify({ type: "show_ended", songs: recap } as ServerMsg));
 
   ws.on("message", (raw) => {
     let msg: ClientMsg;
