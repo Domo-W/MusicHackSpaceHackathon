@@ -35,6 +35,13 @@
     el.crossOrigin = "anonymous";
     el.loop = true; // never gap; crossfade replaces it
     el.volume = 0;
+    // Mirror the REAL element state to the dashboard the instant it changes — by
+    // any cause (control, autoplay unblock, crossfade). These fire even when the
+    // stage tab is backgrounded (where the 1s polling timer throttles), so the
+    // dashboard's play/pause readout never goes stale.
+    el.addEventListener("play", emitState);
+    el.addEventListener("pause", emitState);
+    el.addEventListener("playing", emitState);
     const voice = { song, el, durationSec: null, startedAt: null };
     voices.set(song.id, voice);
     return voice;
@@ -133,7 +140,11 @@
     },
 
     play() {
-      if (!paused || !current) return;
+      // Always (re)start the current song — don't gate on the internal `paused`
+      // flag. The flag can drift from reality (e.g. the browser blocked the first
+      // autoplay so the element is paused while the flag says "not paused"); the
+      // dashboard PLAY button must recover from that, not no-op.
+      if (!current) return;
       const pauseDuration = pausedAt == null ? 0 : now() - pausedAt;
       current.startedAt += pauseDuration;
       paused = false;
@@ -201,7 +212,9 @@
     const el = current ? current.el : null;
     const dur = el && isFinite(el.duration) ? el.duration : 0;
     onState({
-      playing: !!current && !paused,
+      // Report whether audio is ACTUALLY producing sound (the element's own
+      // state), not our internal intent flag — so the dashboard mirrors reality.
+      playing: !!el && !el.paused,
       canSkip: !!pending,
       song: current ? current.song : null,
       nextSong: pending ? pending.song : null,

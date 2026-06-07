@@ -16,8 +16,12 @@
 const { useState, useEffect, useRef, useCallback, useLayoutEffect } = React;
 
 // Vibe ("Pick the Vibe") step removed from the flow for now (code kept, unused).
+// Returning participants keep submitting a fresh INTENT each round (their name is
+// already known): answers are cleared every round, so a vote-only returning flow
+// would leave NO answerer after round 1 and the buzzer would just re-open the
+// vote (timer "restarts"). Re-asking the intent keeps an answer pool every round.
 const SEQ_NEW = ['name', 'intent', 'vote'];
-const SEQ_RETURNING = ['vote'];
+const SEQ_RETURNING = ['intent', 'vote'];
 
 /* Map the backend `show_ended` payload (SavedSong[]) to the recap track shape
    ScreenRecap expects: {id,title,genre,by,dur,fileName,downloadUrl}. SavedSong
@@ -120,10 +124,12 @@ function PhoneShell() {
         if (m.seed) setReveal(m.seed);
         return;
       }
-      if (m.phase === 'collecting') {
+      // 'gathering' (name-cloud window) is the START of a round — same reset as
+      // collecting: drop the loading screen and put the user into name/intent.
+      if (m.phase === 'gathering' || m.phase === 'collecting') {
         const changedRound = m.round !== formedRound.current;
         formedRound.current = m.round;
-        // A new collecting round means a new set is live again — leave the recap.
+        // A new round means a new set is live again — leave the recap.
         setEnded(false);
         if (loadingRef.current || changedRound) {
           setLoading(false);
@@ -137,7 +143,7 @@ function PhoneShell() {
         formedRound.current = 0;
         setLoading(false);
         setReveal(null);
-      } else if (m && m.phase === 'collecting' && m.round !== formedRound.current) {
+      } else if (m && (m.phase === 'gathering' || m.phase === 'collecting') && m.round !== formedRound.current) {
         formedRound.current = m.round;
         // A new collecting round means a new set is live again — leave the recap.
         setEnded(false);
@@ -185,11 +191,6 @@ function PhoneShell() {
         <ScreenRecap tracks={recapTracks} onBack={() => setEnded(false)} />
       ) : (
       <React.Fragment>
-      <div className="topbar">
-        <span className="live-pill"><i className="live-dot" />LIVE<span className="sep">—</span><span className="show">THE SHOW</span></span>
-        <span className="room-stat"><b>{crowd.crowdSize}</b>&nbsp;HERE · <b>{crowd.bpm}</b>&nbsp;BPM</span>
-      </div>
-
       <ShellProgress seq={seq} step={step} loading={loading} />
 
       <div className="deck shell-deck">
@@ -249,7 +250,7 @@ function LoadingScreen({ reveal }) {
   return (
     <div className="screen loading-screen">
       <div className="screen-kicker">HANG TIGHT</div>
-      <h1 className="screen-title">YOUR TRACK<br /><span className="accent">IS BEING MADE</span></h1>
+      <h1 className="screen-title">THE NEXT TRACK<br /><span className="accent">IS COOKING</span></h1>
       <div className="ls-orb" aria-hidden="true"><span /><span /><span /></div>
       {reveal ? (
         <div className="ls-next">
@@ -280,16 +281,12 @@ function VoteScreen() {
     return () => { off(); if (raf) cancelAnimationFrame(raf); };
   }, []);
 
-  const holdRef = useRef(null);
+  // TAP ONLY — one pull per tap. Holding is intentionally NOT auto-fired: a held
+  // finger used to rapid-pull (setInterval) which is overpowered. Each discrete
+  // tap = one pull, so spamming distinct taps is the only way to push your genre.
   const fire = (side) => { try { window.Tug.pull(side, 0.62); } catch (e) {} if (navigator.vibrate) navigator.vibrate(12); };
-  const down = (side) => (e) => {
-    e.preventDefault();
-    fire(side);
-    if (holdRef.current) clearInterval(holdRef.current);
-    holdRef.current = setInterval(() => fire(side), 110); // hold = rapid auto-fire
-  };
-  const up = () => { if (holdRef.current) { clearInterval(holdRef.current); holdRef.current = null; } };
-  useEffect(() => () => up(), []);
+  const down = (side) => (e) => { e.preventDefault(); fire(side); };
+  const up = () => {};
 
   const t = tugRef.current;
   const G = window.Tug.GENRES;
@@ -311,7 +308,7 @@ function VoteScreen() {
         <span className="vs-fill" style={{ height: pct[side] + '%' }} />
         <span className="vs-genre">{g.name}</span>
         <span className="vs-pct">{pct[side]}<i>%</i></span>
-        <span className="vs-cta"><i className="vs-dot" />HOLD TO PULL</span>
+        <span className="vs-cta"><i className="vs-dot" />TAP TO PULL</span>
       </button>
     );
   };
@@ -330,7 +327,7 @@ function VoteScreen() {
         </div>
         <div className="vs-timer-bar"><i style={{ width: (timeFrac * 100) + '%' }} /></div>
       </div>
-      <div className="vs-kicker">TAP OR HOLD TO PULL YOUR GENRE</div>
+      <div className="vs-kicker">TAP FAST TO PULL YOUR GENRE</div>
       <div className="vs-grid">{btn('A')}{btn('B')}</div>
     </div>
   );

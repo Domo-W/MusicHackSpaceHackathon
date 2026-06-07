@@ -37,6 +37,7 @@ const AUTO_GENRE_PAIRS: Array<{ A: GenreInfo; B: GenreInfo }> = [
 ];
 let genreA: GenreInfo = { ...AUTO_GENRE_PAIRS[0]!.A };
 let genreB: GenreInfo = { ...AUTO_GENRE_PAIRS[0]!.B };
+let gatherSeconds = CONFIG.gatherSeconds;
 let collectSeconds = CONFIG.collectSeconds;
 
 // ---------------- runtime state ----------------
@@ -65,6 +66,8 @@ let endedRecap: SavedSong[] | null = null;
 const songBpms = new Map<string, number>();
 
 let collectEndsAt = 0; // epoch ms when the current collecting window buzzes
+let gatherEndsAt = 0; // epoch ms when the name-cloud window opens voting
+let gatherTimer: NodeJS.Timeout | null = null; // name-cloud window → opens voting
 let buzzerTimer: NodeJS.Timeout | null = null;
 let tugLoop: NodeJS.Timeout | null = null; // decay + ~15Hz snapshot broadcast
 
@@ -127,6 +130,10 @@ export function reset(): void {
   endedRecap = null;
   genreA = { ...AUTO_GENRE_PAIRS[0]!.A };
   genreB = { ...AUTO_GENRE_PAIRS[0]!.B };
+  if (gatherTimer) {
+    clearTimeout(gatherTimer);
+    gatherTimer = null;
+  }
   if (buzzerTimer) {
     clearTimeout(buzzerTimer);
     buzzerTimer = null;
@@ -153,6 +160,10 @@ export async function endShow(): Promise<void> {
   started = false;
   held = false;
   phase = "idle";
+  if (gatherTimer) {
+    clearTimeout(gatherTimer);
+    gatherTimer = null;
+  }
   if (buzzerTimer) {
     clearTimeout(buzzerTimer);
     buzzerTimer = null;
@@ -169,24 +180,48 @@ export async function endShow(): Promise<void> {
   broadcastTug();
 }
 
-/** Dashboard pressed Start. Begin COLLECTING round 1 (cold start). */
-export function startShow(opener?: { prompt: string; genre: string }): void {
+// The fixed opener track the stage plays the instant the show starts — no
+// generation, no "crafting your song" tease. Served statically from
+// frontend/assets so it resolves on both localhost and the Render host.
+const OPENER_URL = "/assets/opener.m4a";
+
+/**
+ * Broadcast the fixed opener track as the first "song" so the stage plays it
+ * from silence immediately. There is NO generation step, so phones never hit the
+ * loading/"generating" screen — they sit on the NAME screen while it plays. The
+ * stage's onPlaying (fired by AudioEngine.makeCurrent) then opens round 1
+ * collecting for song-2, exactly like the steady-state loop.
+ */
+function playOpenerTrack(): void {
+  const id = `song-opener-${Date.now()}`;
+  const song: Song = {
+    id,
+    title: "In Between — Opener",
+    name: "BETWEEN SETS",
+    genre: "",
+    bpm: currentBpm,
+    lyrics: "",
+    streamUrl: OPENER_URL,
+    finalUrl: OPENER_URL,
+  };
+  songBpms.set(id, currentBpm);
+  console.log(`[show] opener → playing fixed track ${OPENER_URL}`);
+  broadcast({ type: "song_ready", song });
+}
+
+/** Dashboard pressed Start. Play the fixed opener, then COLLECT round 1. */
+export function startShow(_opener?: { prompt: string; genre: string }): void {
   if (started) return;
   started = true;
   roundIndex = 0;
   held = false;
-  if (opener && opener.prompt.trim()) {
-    // Generate the DJ's opener as song-1 immediately. It plays first; the stage's
-    // onPlaying then triggers round 1 collecting (for song-2) — no initial silence.
-    const genre = opener.genre || genreA.name;
-    const seed: Seed = { name: "THE SHOW", answer: opener.prompt.trim(), genre };
-    activeSeed = seed;
-    console.log(`[show] starting with DJ opener — ${genre}: "${seed.answer}"`);
-    void generateNext(seed, { opener: true });
-    return;
-  }
-  console.log("[show] starting — collecting round 1");
-  beginCollecting();
+  // Stay on the name-cloud view from the start (phase "gathering", not "playing")
+  // so there's no lobby→battle→lobby flicker. The fixed opener plays from silence;
+  // its onPlaying opens the real 15s gather window (round 1), then voting.
+  phase = "gathering";
+  console.log("[show] starting — fixed opener track, then gather → vote");
+  playOpenerTrack();
+  broadcastShowState();
 }
 
 /**
@@ -209,7 +244,7 @@ export function onPlaying(id: string): void {
     console.log("[show] held — not advancing to next round");
     return;
   }
-  beginCollecting();
+  beginGathering();
 }
 
 /** config: set the question, the two genres, and the collect window. */
@@ -262,7 +297,7 @@ export function resume(): void {
   held = false;
   console.log("[show] resume — advancing re-enabled");
   broadcastShowState();
-  if (started && phase === "playing") beginCollecting();
+  if (started && phase === "playing") beginGathering();
 }
 
 /** endVote: force the current collecting round to resolve NOW (testing). */
@@ -282,7 +317,13 @@ export function endVote(): void {
 
 // ---------------- collecting ----------------
 
-function beginCollecting(): void {
+/**
+ * Start a round with the NAME-CLOUD window (phase "gathering"): the stage shows
+ * the name cloud, people join + submit intents, no voting yet. After
+ * `gatherSeconds` the tug-of-war vote opens (beginVoting). This is the round
+ * boundary — genre pick + tug/answer reset happen here.
+ */
+function beginGathering(): void {
   roundIndex += 1;
   const automaticPair = AUTO_GENRE_PAIRS[autoGenrePairIndex % AUTO_GENRE_PAIRS.length]!;
   autoGenrePairIndex += 1;
@@ -303,17 +344,34 @@ function beginCollecting(): void {
     tug.reset(genreA, genreB);
     participants.clearRound();
   }
-  phase = "collecting";
+  phase = "gathering";
   endedRecap = null; // a new round means the set is live again, not in recap
   activeSeed = undefined;
   generationError = undefined;
+
+  // No buzzer yet — just run the name-cloud window, then open voting.
+  gatherEndsAt = Date.now() + gatherSeconds * 1000;
+  if (buzzerTimer) { clearTimeout(buzzerTimer); buzzerTimer = null; }
+  if (gatherTimer) clearTimeout(gatherTimer);
+  gatherTimer = setTimeout(beginVoting, gatherSeconds * 1000);
+
+  startTugLoop();
+  console.log(`[show] gathering (name cloud) round ${roundIndex} for ${gatherSeconds}s`);
+  broadcastShowState();
+}
+
+/** Open the tug-of-war genre vote window (phase "collecting"); the buzzer at the
+ *  end resolves the winning genre + selected participant. */
+function beginVoting(): void {
+  gatherTimer = null;
+  phase = "collecting";
   collectEndsAt = Date.now() + collectSeconds * 1000;
 
   if (buzzerTimer) clearTimeout(buzzerTimer);
   buzzerTimer = setTimeout(onBuzzer, collectSeconds * 1000);
 
   startTugLoop();
-  console.log(`[show] collecting round ${roundIndex} for ${collectSeconds}s`);
+  console.log(`[show] voting (tug-of-war) round ${roundIndex} for ${collectSeconds}s`);
   broadcastShowState();
 }
 
@@ -338,8 +396,18 @@ function startTugLoop(): void {
 
 function broadcastTug(): void {
   const s = tug.snapshot();
-  const timeRemaining =
-    phase === "collecting" ? Math.max(0, (collectEndsAt - Date.now()) / 1000) : 0;
+  // The countdown carried in the snapshot matches the current phase: the gather
+  // window (name cloud) counts down to voting; the vote window counts down to the
+  // buzzer. Both feed the same timeRemaining/timeTotal fields.
+  let timeRemaining = 0;
+  let timeTotal = collectSeconds;
+  if (phase === "collecting") {
+    timeRemaining = Math.max(0, (collectEndsAt - Date.now()) / 1000);
+    timeTotal = collectSeconds;
+  } else if (phase === "gathering") {
+    timeRemaining = Math.max(0, (gatherEndsAt - Date.now()) / 1000);
+    timeTotal = gatherSeconds;
+  }
   broadcast({
     type: "tug",
     phase,
@@ -352,7 +420,7 @@ function broadcastTug(): void {
     membersA: s.membersA,
     membersB: s.membersB,
     timeRemaining,
-    timeTotal: collectSeconds,
+    timeTotal,
     crowdSize: participants.count(),
     energy: s.energy,
     bpm: currentBpm,

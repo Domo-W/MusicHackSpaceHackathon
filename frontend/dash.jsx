@@ -291,7 +291,7 @@ function PastSets() {
         <div className="panel-sub">Browse previous sets — preview, play, or download any track</div>
       </div>
       <div className="panel-body">
-        <audio ref={audioRef} onEnded={() => setPlayId(null)} />
+        <audio ref={audioRef} onEnded={() => setPlayId(null)} onPause={() => setPlayId(null)} />
         {sets.length === 0
           ? <div className="ps-empty">No sets yet — generated tracks gather here.</div>
           : sets.map((set, si) => {

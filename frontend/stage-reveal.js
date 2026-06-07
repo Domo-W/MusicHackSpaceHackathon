@@ -47,6 +47,8 @@
   var ticker = document.getElementById("revealTicker");
   var reveal = document.getElementById("revealOverlay");
   var lobbyCount = document.getElementById("lobbyCount");
+  var gatherCountdown = document.getElementById("gatherCountdown");
+  var gcNum = document.getElementById("gcNum");
   var voteFill = document.getElementById("voteFill");
   var voteLbl = document.getElementById("voteLbl");
   // stage.js sets the genre NAME text only once at init (when net-tug still holds
@@ -77,10 +79,18 @@
     tickerTimer = setTimeout(function () { ticker.dataset.on = "0"; }, 9000);
   });
 
-  // ---- round_result: BIG full-screen drop reveal ----
-  // Build all DOM with createElement + textContent. Single timeout handle so a
-  // new reveal arriving mid-hold cleanly replaces the previous one.
-  var revealTimer = null;
+  // ---- round_result → "cooking" hold screen ----
+  // The reveal drops in at the buzzer and STAYS UP for the whole generation —
+  // covering the tug battle (no giant genre showing behind) — until the next Suno
+  // song actually starts playing. It's dismissed by phase (→ "gathering"), NOT a
+  // timer, so we never flash back to the tug while a song is still cooking.
+  var revealUp = false;
+  function dismissReveal() {
+    if (!reveal) return;
+    reveal.dataset.on = "0";
+    document.body.classList.remove("revealing"); // bring the battle text back
+    revealUp = false;
+  }
   Net.on("round_result", function (m) {
     if (!reveal) return;
 
@@ -91,8 +101,6 @@
       if (G && m.winner && G[m.winner] && G[m.winner].color) color = G[m.winner].color;
     } catch (e) {}
 
-    // tear down any in-flight reveal
-    if (revealTimer) { clearTimeout(revealTimer); revealTimer = null; }
     reveal.textContent = "";
 
     var card = document.createElement("div");
@@ -123,21 +131,26 @@
       card.append(answerEl);
     }
 
+    // persistent "cooking" status so it reads as being-made, not a flash reveal
+    var cooking = document.createElement("div");
+    cooking.className = "rv-cooking";
+    cooking.textContent = "COOKING THE NEXT TRACK";
+    card.append(cooking);
+
     reveal.append(card);
 
-    // animate in → hold ~4s → fade out
+    // animate in → HOLD (no timed fade-out; phase drives dismissal)
     reveal.dataset.on = "1";
     document.body.classList.add("revealing"); // hide the background text/readouts
     reveal.style.animation = "none";
     void reveal.offsetWidth; // reflow so re-triggered animation restarts
     reveal.style.animation = "";
-
-    revealTimer = setTimeout(function () {
-      reveal.dataset.on = "0";
-      document.body.classList.remove("revealing"); // bring the text back
-      revealTimer = null;
-    }, 4600); // ~0.6s in + ~4s hold (fade-out handled by CSS transition)
+    revealUp = true;
   });
+
+  // Safety dismissals: a failed generation or a reset shouldn't leave the cooking
+  // screen stuck up. (The happy-path dismissal is phase→"gathering" in the tug handler.)
+  Net.on("generation_failed", dismissReveal);
 
   // ---- LOBBY vs BATTLE: the show is started from the DASHBOARD now. Before the
   // DJ starts (phase "idle"), the stage shows the "scan to join" lobby; once a
@@ -196,15 +209,31 @@
     // While the finale is up, ignore lobby/battle toggles — only a live round
     // (collecting) tears it down.
     if (ended) {
-      if (m.phase === "collecting") {
+      if (m.phase === "collecting" || m.phase === "gathering") {
         ended = false;
         document.body.classList.remove("ended");
       } else {
         return;
       }
     }
-    var isLobby = m.phase === "idle";
+    // The name cloud (lobby view) stays up before the show AND during each round's
+    // gather window; it flips to the tug battle only once voting opens.
+    var isLobby = m.phase === "idle" || m.phase === "gathering";
     document.body.classList.toggle("lobby", isLobby);
+
+    // The "cooking" hold (reveal) stays up through generation; it drops only when
+    // the next song actually starts (→ "gathering") or we reset (→ "idle").
+    if (revealUp && (m.phase === "gathering" || m.phase === "idle")) dismissReveal();
+
+    // Name-cloud countdown: during the gather window, show "VOTING STARTS IN Ns".
+    if (gatherCountdown) {
+      if (m.phase === "gathering" && m.timeTotal > 0) {
+        gatherCountdown.dataset.on = "1";
+        if (gcNum) gcNum.textContent = Math.ceil(m.timeRemaining);
+      } else {
+        gatherCountdown.dataset.on = "0";
+      }
+    }
     if (lobbyCount && typeof m.crowdSize === "number") lobbyCount.textContent = m.crowdSize;
 
     // Keep the genre names in sync (stage.js only sets them once, at init).
@@ -232,11 +261,55 @@
   var NC_SIZES = [26, 32, 40, 30, 48, 28, 36, 34];
   var NC_COLORS = ["var(--cyan)", "var(--magenta)", "#ffffff", "var(--cyan)", "var(--magenta)"];
   var shown = {}; // name -> element, so adds are idempotent (no flicker on re-broadcast)
+
+  // ---- TEAM credits seed: before any real name lands, the cloud shows the team.
+  // The instant the first audience name arrives, the seed clears and only real
+  // names show. Re-seeds whenever the cloud empties (lobby / reset). ----
+  var TEAM_SEED = [
+    { name: "Dominic Woetzel", loc: "Los Angeles, CA" },
+    { name: "Daniel Hopin", loc: "Austin, TX" },
+    { name: "C.Y. Lee", loc: "Seattle, WA" },
+    { name: "Dupes", loc: "St. Lucia, West Indies" },
+    { name: "Pete Rango", loc: "Richmond, VA" },
+  ];
+  var seedEls = [];
+  var seedActive = false;
+  function showTeamSeed() {
+    if (seedActive || !nameCloud) return;
+    seedActive = true;
+    TEAM_SEED.forEach(function (m, i) {
+      var el = document.createElement("span");
+      el.className = "nc-name nc-team";
+      el.textContent = m.name; // ours, but keep textContent for consistency/safety
+      if (m.loc) {
+        var loc = document.createElement("i");
+        loc.className = "nc-loc";
+        loc.textContent = m.loc;
+        el.appendChild(loc);
+      }
+      el.style.color = NC_COLORS[i % NC_COLORS.length];
+      el.style.setProperty("--fd", (4 + (i % 3) * 0.8).toFixed(2) + "s");
+      el.style.setProperty("--fdel", (-i * 0.9).toFixed(2) + "s");
+      nameCloud.appendChild(el);
+      requestAnimationFrame(function () { el.classList.add("in"); });
+      seedEls.push(el);
+    });
+    updateEmpty();
+  }
+  function clearTeamSeed() {
+    if (!seedActive) return;
+    seedActive = false;
+    seedEls.forEach(function (el) { if (el && el.parentNode) el.parentNode.removeChild(el); });
+    seedEls = [];
+    updateEmpty();
+  }
+
   function updateEmpty() {
-    if (cloudEmpty) cloudEmpty.style.display = Object.keys(shown).length ? "none" : "";
+    if (cloudEmpty) cloudEmpty.style.display = (Object.keys(shown).length || seedActive) ? "none" : "";
   }
   function addName(name) {
     if (!nameCloud || !name || shown[name]) return;
+    if (seedActive) clearTeamSeed(); // first real name clears the team credits
     var el = document.createElement("span");
     el.className = "nc-name";
     el.textContent = name; // audience input → textContent, never innerHTML
@@ -258,10 +331,13 @@
     Object.keys(shown).forEach(function (n) {
       if (!keep[n]) { var el = shown[n]; if (el && el.parentNode) el.parentNode.removeChild(el); delete shown[n]; }
     });
+    // No real names yet (pre-show / after reset) → show the team credits.
+    if (Object.keys(shown).length === 0) showTeamSeed();
     updateEmpty();
   }
   Net.on("name", function (m) { if (m && m.name) addName(m.name); });
   Net.on("names", function (m) { reconcile((m && m.names) || []); });
+  showTeamSeed(); // seed immediately on load (the lobby is up before any join)
 
   // ---- audio unlock: browsers block audio until a user gesture. The DJ starts
   // the show from the dashboard, so the stage just needs ONE click anywhere to

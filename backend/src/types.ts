@@ -45,7 +45,10 @@ export type Side = "A" | "B";
 
 // Phase of the round currently COLLECTING input (the next song). A song is
 // always playing (or cold-start silent) while the next round collects.
-export type Phase = "idle" | "collecting" | "generating" | "playing";
+//   gathering  — name-cloud window: people join + submit intents (stage shows the
+//                name cloud, no voting yet) for ~15s.
+//   collecting — tug-of-war genre vote window (~30s); the buzzer resolves it.
+export type Phase = "idle" | "gathering" | "collecting" | "generating" | "playing";
 
 export interface ShowState {
   started: boolean;

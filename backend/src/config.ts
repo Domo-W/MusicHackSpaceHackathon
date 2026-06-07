@@ -31,7 +31,8 @@ export const CONFIG = {
   // --- show / timing ---
   defaultBpm: Number(process.env.DEFAULT_BPM ?? 120),
   fadeSeconds: Number(process.env.FADE_SECONDS ?? 2), // fade-out + fade-in transition length
-  collectSeconds: Number(process.env.COLLECT_SECONDS ?? 50), // tug round / collection window
+  gatherSeconds: Number(process.env.GATHER_SECONDS ?? 15), // name-cloud window before voting opens
+  collectSeconds: Number(process.env.COLLECT_SECONDS ?? 30), // tug-of-war genre vote window
   targetSections: 6, // lyric sections → song length lever (calibrate at rehearsal)
 
   // --- local song archive (fallback when Supabase is not configured) ---

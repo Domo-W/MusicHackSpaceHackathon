@@ -106,13 +106,9 @@
       lastDom = now;
       const tec = Math.round((1 - p) * 100);
       tecPct.textContent = tec; dscPct.textContent = 100 - tec;
-      roundTxt.textContent = `ROUND ${s.round} · BEST OF ${s.bestOf}`;
-      // score dots: 2 slots per side (first to 2)
-      let html = '';
-      for (let i = 0; i < 2; i++) html += `<i class="${i < s.scoreA ? 'a' : ''}"></i>`;
-      html += '<span style="width:22px"></span>';
-      for (let i = 0; i < 2; i++) html += `<i class="${i < s.scoreB ? 'b' : ''}"></i>`;
-      scoreEl.innerHTML = html;
+      roundTxt.textContent = `ROUND ${s.round}`;
+      // Score dots removed — one timed round per song, no best-of, so the
+      // per-side win pips (#score) no longer exist in the DOM.
       hypeSmooth += (Math.min(1, (s.forceA + s.forceB) / 4.5) - hypeSmooth) * 0.15;
       hypeFill.style.width = (8 + hypeSmooth * 92) + '%';
 
