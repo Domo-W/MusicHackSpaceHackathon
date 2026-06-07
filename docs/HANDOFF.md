@@ -82,14 +82,21 @@ stage screen is the ONLY audio host (crossfade → PA)
   users get vibe → vote.
 - `stage-reveal.js` + `audioEngine.js` — stage audio engine (crossfade), generating
   ticker, big round-result reveal, live name cloud, lobby/battle toggle.
+- `dash.jsx` — partner's DJ console, **edited by us** (with their sign-off): the old
+  Name Cloud panel is replaced by a first-class **Session Setlist** panel (live
+  `/api/songs` list with per-track Download + two-step Delete, marks the now-playing
+  track from `playback_state`), and the fixed 1440×900 scale-to-fit was replaced by a
+  fluid full-viewport layout (injected `DASH_CSS`) so it uses the whole screen.
 - `dash-net.js` — **our** dashboard glue. Subscribes to the partner's
   BroadcastChannel(`dj-console`) for genre/question config; injects the bottom
-  **LIVE SCREEN AUDIO** player bar (play/pause, next track, download, show-actions
-  drawer) and the **Session Songs** panel (list of this session's saved tracks with
-  per-track download; marks the now-playing track).
+  **LIVE SCREEN AUDIO** player bar (play/pause, next track, show-actions drawer with
+  Start / End Vote / Regenerate / Hold / Resume / Reset / **End Show**). The session
+  playlist used to live here as a slide-out — it now lives in `dash.jsx` (above).
 
-**Partner files — DO NOT EDIT:** `app.jsx`, `screen-*.jsx`, `dash.jsx`, `stage.js`,
-`tug-sim.js`, `crowd-sim.js`, their CSS. Integrate only via `window.*` + our files.
+**Partner files — avoid editing** (integrate via `window.*` + our files where possible):
+`app.jsx`, `screen-*.jsx`, `stage.js`, `tug-sim.js`, `crowd-sim.js`, their CSS.
+NOTE: `dash.jsx` was intentionally edited by us (Name Cloud → Session Setlist + fluid
+layout) with the user's approval — coordinate with the partner before further edits.
 
 ## Security invariants (keep these)
 
@@ -106,7 +113,11 @@ stage screen is the ONLY audio host (crossfade → PA)
 - ✅ Lyrics no longer over-repeat "good vibe/good energy" — each chorus is custom to
   the person's intent (prompt rewritten in `agent.ts`).
 - ✅ Tempo follows genre common tempos via `tempo.ts` (not stuck at 120).
-- ✅ Dashboard player bar + Session Songs list (download the exact looping track).
+- ✅ **End Show → recap** (partner's screens, merged): dashboard End Show → `show_ended`
+  → stage **SET COMPLETE** finale + phone **ScreenRecap** playlist (play-all + per-track
+  download), both driven by the real saved songs. Verified end-to-end.
+- ✅ **Dashboard redesign**: Name Cloud → first-class **Session Setlist** panel
+  (download/delete/now-playing), fluid full-screen layout, redundant slide-out removed.
 
 ## Open / next
 

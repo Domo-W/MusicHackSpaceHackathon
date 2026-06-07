@@ -20,11 +20,6 @@ const GENRES = [
 ];
 const genreById = (id) => GENRES.find((g) => g.id === id);
 
-let _nid = 0;
-const mkName = (t) => ({ id: ++_nid, text: t });
-const SEED_NAMES = ['neon', 'DJ_MAX', 'rain', 'spacecadet', 'heavy', 'luna', 'BASSLINE',
-  'mia', 'void', 'strobe', 'ravi', 'glow', 'smoke', 'zara', 'afterdark', 'kojib2b'].map(mkName);
-
 /* the single isolated mock sink (swap for a real backend later) */
 function pushToCrowd(channel, payload) {
   // e.g. POST /api/show/{channel}  — for now just log + broadcast if available
@@ -32,33 +27,126 @@ function pushToCrowd(channel, payload) {
   try { new BroadcastChannel('dj-console').postMessage({ channel, payload, ts: Date.now() }); } catch (e) {}
 }
 
+/* Fluid layout + Session Setlist styles. Injected from JSX so the dashboard
+   fills the whole screen (no fixed 1440×900 letterbox) without editing dash.css. */
+const DASH_CSS = `
+  /* fill the viewport instead of centering a fixed-size board */
+  #viewport { display: block !important; }
+  #dashRoot {
+    width: 100% !important; height: calc(100vh - 98px) !important;
+    transform: none !important; border-radius: 0 !important;
+  }
+  /* Session Setlist (Panel 02) */
+  .sl-row { display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-radius: 12px;
+    background: var(--surface-2); border: 1px solid var(--line); }
+  .sl-row.is-now { border-color: rgba(45,211,111,0.55); background: rgba(45,211,111,0.08); }
+  .sl-num { width: 26px; flex: none; text-align: center; font-family: var(--mono); font-weight: 700; font-size: 14px; color: var(--dim); }
+  .sl-row.is-now .sl-num { color: #2DD36F; }
+  .sl-copy { min-width: 0; flex: 1; }
+  .sl-title { font-family: var(--disp); font-weight: 600; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sl-meta { margin-top: 3px; font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em; color: var(--dim);
+    text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sl-row.is-now .sl-meta { color: #2DD36F; }
+  .sl-btn { flex: none; height: 34px; padding: 0 13px; border-radius: 9px; border: 1px solid var(--line-2);
+    background: var(--surface-3); color: var(--text); font-family: var(--disp); font-weight: 600; font-size: 11px;
+    letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer; transition: border-color .15s, background .15s; }
+  .sl-btn:hover { border-color: rgba(0,229,255,0.5); background: #20202C; }
+  .sl-del { width: 38px; padding: 0; color: var(--dim); }
+  .sl-del:hover { border-color: rgba(255,77,109,0.6); color: #FF4D6D; background: rgba(255,77,109,0.08); }
+  .sl-del.is-confirm { width: auto; padding: 0 12px; background: #FF4D6D; border-color: #FF4D6D; color: #0A0A0F; }
+  .sl-empty { margin: auto; text-align: center; font-family: var(--mono); font-size: 13px; color: var(--dim-2); padding: 30px; }
+  .sl-foot { font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; color: var(--dim); text-transform: uppercase; }
+`;
+
+/* ===== PANEL 02 — SESSION SETLIST =====
+   The live archive of generated songs (GET /api/songs), updated as the crowd
+   makes them (song_saved / song_deleted) with the looping track marked from
+   playback_state. Per-track Download + a two-step Delete so the DJ can prune. */
+function Setlist() {
+  const [songs, setSongs] = useState([]);
+  const [currentId, setCurrentId] = useState(null);
+  const [confirmId, setConfirmId] = useState(null);
+  const confirmTimer = useRef(null);
+
+  const refresh = () => fetch('/api/songs')
+    .then((r) => (r.ok ? r.json() : { songs: [] }))
+    .then((d) => setSongs(Array.isArray(d.songs) ? d.songs : []))
+    .catch(() => {});
+
+  useEffect(() => {
+    refresh();
+    const N = window.Net;
+    if (!N || !N.on) return;
+    const offSaved = N.on('song_saved', refresh);
+    const offDeleted = N.on('song_deleted', refresh);
+    const offPlay = N.on('playback_state', (m) => setCurrentId(m && m.song ? m.song.id : null));
+    return () => { offSaved && offSaved(); offDeleted && offDeleted(); offPlay && offPlay(); };
+  }, []);
+
+  const download = (s) => {
+    const a = document.createElement('a');
+    a.href = s.downloadUrl; a.download = s.fileName || '';
+    document.body.appendChild(a); a.click(); a.remove();
+  };
+  const del = (s) => {
+    if (confirmId !== s.id) { // first click arms, second within 3s confirms
+      setConfirmId(s.id);
+      if (confirmTimer.current) clearTimeout(confirmTimer.current);
+      confirmTimer.current = setTimeout(() => setConfirmId(null), 3000);
+      return;
+    }
+    if (confirmTimer.current) clearTimeout(confirmTimer.current);
+    setConfirmId(null);
+    fetch('/api/songs/' + encodeURIComponent(s.id), { method: 'DELETE' }).then(refresh).catch(() => {});
+  };
+
+  return (
+    <div className="panel">
+      <div className="panel-head">
+        <div className="panel-num">PANEL 02</div>
+        <div className="panel-title">Session Setlist</div>
+        <div className="panel-sub">Every track the crowd generated — download or remove before the set ends</div>
+      </div>
+      <div className="panel-body">
+        {songs.length === 0
+          ? <div className="sl-empty">No songs yet — they appear here as the crowd generates them.</div>
+          : songs.map((s, i) => {
+            const now = s.id === currentId;
+            return (
+              <div className={'sl-row' + (now ? ' is-now' : '')} key={s.id}>
+                <div className="sl-num">{now ? '▶' : songs.length - i}</div>
+                <div className="sl-copy">
+                  <div className="sl-title">{s.title}</div>
+                  <div className="sl-meta">{(now ? 'Now playing · ' : '') + s.genre + ' · ' + s.bpm + ' BPM · for ' + s.name}</div>
+                </div>
+                <button className="sl-btn" onClick={() => download(s)}>Download</button>
+                <button className={'sl-btn sl-del' + (confirmId === s.id ? ' is-confirm' : '')}
+                  onClick={() => del(s)} aria-label={'delete ' + s.title}>
+                  {confirmId === s.id ? 'Delete?' : '✕'}
+                </button>
+              </div>
+            );
+          })}
+      </div>
+      <div className="panel-foot">
+        <div className="sl-foot">{songs.length} track{songs.length === 1 ? '' : 's'} this session · saved locally</div>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const [cards, setCards] = useState(['', '', '', '']);
-  const [names, setNames] = useState(SEED_NAMES);
-  const [removing, setRemoving] = useState({});
-  const [query, setQuery] = useState('');
   const [sideA, setSideA] = useState('soca');
   const [sideB, setSideB] = useState('afrobeats');
   const [toast, setToast] = useState({ msg: '', color: '', show: false });
-  const [scale, setScale] = useState(1);
   const [clock, setClock] = useState('');
   const toastTimer = useRef(null);
 
   // mirror all editable state to one isolated place
   useEffect(() => {
-    window.DJConsoleState = { cards, names: names.map((n) => n.text), sideA, sideB };
-  }, [cards, names, sideA, sideB]);
-
-  // scale to fit
-  useEffect(() => {
-    const fit = () => {
-      const player = document.getElementById('dashNetBar');
-      const playerHeight = player ? player.getBoundingClientRect().height + 10 : 0;
-      setScale(Math.min(window.innerWidth / 1440, (window.innerHeight - playerHeight) / 900));
-    };
-    fit(); window.addEventListener('resize', fit);
-    return () => window.removeEventListener('resize', fit);
-  }, []);
+    window.DJConsoleState = { cards, sideA, sideB };
+  }, [cards, sideA, sideB]);
 
   // live clock
   useEffect(() => {
@@ -81,20 +169,6 @@ function App() {
   };
   const filledCards = cards.filter((c) => c.trim()).length;
 
-  // ---- Panel 2 actions ----
-  const removeName = (id) => {
-    setRemoving((r) => ({ ...r, [id]: true }));
-    setTimeout(() => {
-      setNames((ns) => ns.filter((n) => n.id !== id));
-      setRemoving((r) => { const c = { ...r }; delete c[id]; return c; });
-    }, 190);
-  };
-  const clearAll = () => { setNames([]); setRemoving({}); showToast('Cleared all names', 'magenta'); };
-  const filtered = useMemo(
-    () => names.filter((n) => n.text.toLowerCase().includes(query.trim().toLowerCase())),
-    [names, query]
-  );
-
   // ---- Panel 3 actions ----
   const pickA = (id) => { if (id !== sideB) setSideA(id); };
   const pickB = (id) => { if (id !== sideA) setSideB(id); };
@@ -106,7 +180,8 @@ function App() {
 
   return (
     <div id="viewport">
-      <div id="dashRoot" style={{ transform: `scale(${scale})` }}>
+      <style>{DASH_CSS}</style>
+      <div id="dashRoot">
         {/* header */}
         <div className="dash-head">
           <div className="dh-left">
@@ -156,32 +231,8 @@ function App() {
             </div>
           </div>
 
-          {/* ===== PANEL 2 — NAME CLOUD ===== */}
-          <div className="panel">
-            <div className="panel-head">
-              <div className="panel-num">PANEL 02</div>
-              <div className="panel-title">Name Cloud Moderation</div>
-              <div className="panel-sub">Submitted names &amp; words on the crowd wall</div>
-            </div>
-            <div className="panel-body">
-              <div className="nm-tools">
-                <input className="nm-search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="filter…" />
-                <button className="nm-clear" onClick={clearAll} disabled={!names.length}>Clear all</button>
-              </div>
-              <div className="nm-count">REMAINING&nbsp; <b>{names.length}</b>{query && ` · ${filtered.length} shown`}</div>
-              <div className="nm-grid">
-                {filtered.length === 0 && <div className="nm-empty">{names.length ? 'NO MATCHES' : 'CLOUD EMPTY'}</div>}
-                {filtered.map((n) => (
-                  <span className={'nm-chip' + (removing[n.id] ? ' out' : '')} key={n.id}>
-                    {n.text}
-                    <button className="nm-x" onClick={() => removeName(n.id)} aria-label={'remove ' + n.text}>
-                      <svg width="11" height="11" viewBox="0 0 12 12"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
-                    </button>
-                  </span>
-                ))}
-              </div>
-            </div>
-          </div>
+          {/* ===== PANEL 2 — SESSION SETLIST ===== */}
+          <Setlist />
 
           {/* ===== PANEL 3 — TUG GENRES ===== */}
           <div className="panel">
