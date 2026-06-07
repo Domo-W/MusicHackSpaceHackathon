@@ -2,6 +2,7 @@
 // table. Used when SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY are set (durable
 // across host redeploys, unlike local disk). Same SongStore interface as local.
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import WebSocket from "ws";
 import { CONFIG } from "./config.js";
 import type { SavedSong, Song } from "./types.js";
 import {
@@ -48,6 +49,10 @@ export class SupabaseSongStore implements SongStore {
   constructor() {
     this.client = createClient(CONFIG.supabaseUrl, CONFIG.supabaseServiceKey, {
       auth: { persistSession: false, autoRefreshToken: false },
+      // Node <22 has no global WebSocket; supabase-js's realtime client throws on
+      // construction without one. We don't use realtime (only Storage + Postgrest),
+      // but the client still initializes it — so hand it the `ws` implementation.
+      realtime: { transport: WebSocket as unknown as never },
     });
     this.bucket = CONFIG.supabaseBucket;
   }
