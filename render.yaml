@@ -1,0 +1,36 @@
+# Render Blueprint — deploys Between Sets (Node + WebSocket) as a long-lived web service.
+#
+# Deploy steps (you do these — they need your Render account + the API keys):
+#   1. ROTATE the Suno + Anthropic keys first (the old ones were shared in chat).
+#   2. In Render: New ▸ Blueprint ▸ connect the Domo-W/Between-Sets repo.
+#      Render reads this file and creates the service.
+#   3. When prompted, paste SUNO_API_KEY and ANTHROPIC_API_KEY (sync:false means
+#      Render asks for them at deploy time — they are NEVER stored in the repo).
+#   4. Deploy. Your URLs:  https://<name>.onrender.com/stage-live.html (stage),
+#      /dash-live.html (dashboard), /phone-live.html (phones). The join QR uses
+#      the public URL automatically.
+#
+# Notes:
+#   - Free plan spins down after ~15 min idle (first hit cold-starts ~30–60s).
+#     For a live show, switch plan to "starter" so it stays always-on.
+#   - WebSockets work on Render (same-origin wss:// — no code change needed).
+#   - data/songs is on ephemeral disk → generated songs are wiped on redeploy.
+#     Add a Render Disk, or swap songStore.ts → Supabase Storage, to persist them.
+services:
+  - type: web
+    name: between-sets
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: SUNO_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      # Optional — set to your Render URL to force the join QR to encode it:
+      # - key: PUBLIC_URL
+      #   value: https://between-sets.onrender.com

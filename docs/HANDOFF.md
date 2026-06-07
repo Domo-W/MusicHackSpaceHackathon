@@ -131,6 +131,22 @@ layout) with the user's approval — coordinate with the partner before further 
   net-crowd (sim chatter gated when real options active). Picks captured via DOM
   delegation in phone-net.js (no partner-file edit). Tally bars in dash.jsx Panel 01.
 
+## Deploy
+
+Vercel can't host this (it's a persistent WebSocket server with an in-memory show
+loop + multi-minute Suno polling — serverless can't do that). Deploy to a long-lived
+host instead. **`render.yaml`** is a Render Blueprint, ready to go:
+- Render ▸ New ▸ Blueprint ▸ connect the repo → it reads `render.yaml`.
+- Paste `SUNO_API_KEY` + `ANTHROPIC_API_KEY` when prompted (`sync:false` — never in repo).
+  **Rotate the keys first.**
+- Free plan cold-starts after idle; use `starter` to stay always-on for a live show.
+- The join QR/URL auto-uses the public host (`server.ts` `publicJoinUrl` + `trust proxy`,
+  or set `PUBLIC_URL`). WebSockets work same-origin (`wss://`), no code change.
+- `tsx` is a runtime dependency so `npm install && npm start` works in production.
+
+A full all-serverless rewrite (Vercel + Supabase Realtime + Postgres, stage-driven
+loop) is possible but is a core rewrite, not a deploy — see chat history if revisiting.
+
 ## Open / next
 
 - **Supabase**: replace `songStore.ts`'s local-disk implementation with a Supabase

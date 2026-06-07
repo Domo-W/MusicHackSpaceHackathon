@@ -40,12 +40,26 @@ function lanIp(): string {
   }
   return "localhost";
 }
-const JOIN_URL = `http://${lanIp()}:${CONFIG.port}/phone-live.html`;
+const LOCAL_JOIN_URL = `http://${lanIp()}:${CONFIG.port}/phone-live.html`;
+
+// The public URL phones scan to join. On a host (Render) it comes from the request
+// (or PUBLIC_URL); locally it falls back to the LAN IP for same-WiFi phones.
+function publicJoinUrl(req: express.Request): string {
+  const env = process.env.PUBLIC_URL?.trim();
+  if (env) return `${env.replace(/\/+$/, "")}/phone-live.html`;
+  const host = (req.get("x-forwarded-host") || req.get("host") || "").split(",")[0]!.trim();
+  if (host) {
+    const proto = (req.get("x-forwarded-proto") || req.protocol || "http").split(",")[0]!.trim();
+    return `${proto}://${host}/phone-live.html`;
+  }
+  return LOCAL_JOIN_URL;
+}
 
 const app = express();
+app.set("trust proxy", true); // Render & most PaaS sit behind a proxy → trust x-forwarded-*
 app.get("/health", (_req, res) => res.json({ ok: true }));
-// Join info + a QR for it, so the stage can show "scan to join" on the same LAN.
-app.get("/api/info", (_req, res) => res.json({ joinUrl: JOIN_URL, lanIp: lanIp(), port: CONFIG.port }));
+// Join info + a QR for it so phones can scan to join.
+app.get("/api/info", (req, res) => res.json({ joinUrl: publicJoinUrl(req), lanIp: lanIp(), port: CONFIG.port }));
 app.get("/api/songs", async (_req, res) => {
   try {
     res.json({ songs: await songStore.list() });
@@ -81,9 +95,9 @@ app.delete("/api/songs/:id", async (req, res) => {
     res.status(500).json({ error: "Could not delete the saved song." });
   }
 });
-app.get("/qr", async (_req, res) => {
+app.get("/qr", async (req, res) => {
   try {
-    const svg = await QRCode.toString(JOIN_URL, { type: "svg", margin: 1, color: { dark: "#0A0A0F", light: "#FFFFFF" } });
+    const svg = await QRCode.toString(publicJoinUrl(req), { type: "svg", margin: 1, color: { dark: "#0A0A0F", light: "#FFFFFF" } });
     res.type("image/svg+xml").send(svg);
   } catch {
     res.status(500).send("qr error");
@@ -228,6 +242,7 @@ wss.on("connection", (ws) => {
 server.listen(CONFIG.port, () => {
   console.log(`[server] stage:     http://localhost:${CONFIG.port}/stage-live.html`);
   console.log(`[server] dashboard: http://localhost:${CONFIG.port}/dash-live.html`);
-  console.log(`[server] JOIN (phones on same WiFi): ${JOIN_URL}`);
+  console.log(`[server] JOIN (phones on same WiFi): ${LOCAL_JOIN_URL}`);
+  console.log(`[server] (on a host, the join URL/QR use the request host or PUBLIC_URL)`);
   console.log(`[server] collectSeconds=${CONFIG.collectSeconds} fadeSeconds=${CONFIG.fadeSeconds} model=${CONFIG.agentModel}`);
 });

@@ -10,11 +10,15 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.68.0",
     "dotenv": "^16.4.5",
     "express": "^4.21.2",
     "qrcode": "^1.5.4",
+    "tsx": "^4.19.2",
     "ws": "^8.18.0"
   },
   "devDependencies": {
@@ -22,7 +26,6 @@
     "@types/node": "^22.10.0",
     "@types/qrcode": "^1.5.6",
     "@types/ws": "^8.5.13",
-    "tsx": "^4.19.2",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"
   }
