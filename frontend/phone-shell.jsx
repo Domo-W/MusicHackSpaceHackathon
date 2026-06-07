@@ -16,12 +16,11 @@
 const { useState, useEffect, useRef, useCallback, useLayoutEffect } = React;
 
 // Vibe ("Pick the Vibe") step removed from the flow for now (code kept, unused).
-// Returning participants keep submitting a fresh INTENT each round (their name is
-// already known): answers are cleared every round, so a vote-only returning flow
-// would leave NO answerer after round 1 and the buzzer would just re-open the
-// vote (timer "restarts"). Re-asking the intent keeps an answer pool every round.
+// EVERYONE walks the whole flow every round — name → intent → vote. Returning
+// participants don't auto-skip the name screen; they re-confirm with a Continue
+// tap (their join is idempotent, so no duplicate) before stating a fresh intent.
 const SEQ_NEW = ['name', 'intent', 'vote'];
-const SEQ_RETURNING = ['intent', 'vote'];
+const SEQ_RETURNING = ['name', 'intent', 'vote'];
 
 /* Map the backend `show_ended` payload (SavedSong[]) to the recap track shape
    ScreenRecap expects: {id,title,genre,by,dur,fileName,downloadUrl}. SavedSong
@@ -163,13 +162,15 @@ function PhoneShell() {
   const next = useCallback(() => setStep((s) => Math.min(s + 1, seq.length - 1)), [seq.length]);
 
   // NAME step auto-advances the moment the join registers — typing your name and
-  // hitting send moves you forward (form-style), no separate "Next" tap needed.
+  // hitting send moves you forward (form-style). Only for FIRST-time joiners: a
+  // returning participant is already joined, so this would instantly skip their
+  // name screen — they advance with the Continue button instead.
   useEffect(() => {
-    if (!loading && screen === 'name' && joined) {
+    if (!loading && screen === 'name' && joined && !participated) {
       const id = setTimeout(() => setStep((s) => (seq[s] === 'name' ? Math.min(s + 1, seq.length - 1) : s)), 400);
       return () => clearTimeout(id);
     }
-  }, [loading, screen, joined, seq]);
+  }, [loading, screen, joined, participated, seq]);
 
   // INTENT step: focus the field as soon as it shows so the keyboard is up
   // (desktop). iOS needs a tap to open the soft keyboard — unavoidable there.
@@ -214,6 +215,13 @@ function PhoneShell() {
       {!loading && screen === 'vibe' && (
         <div className="shell-foot">
           <button className="shell-next" onClick={next}>NEXT →</button>
+        </div>
+      )}
+      {/* Returning participants re-confirm the name screen with Continue (first-time
+          joiners auto-advance on join, so they don't need it). */}
+      {!loading && screen === 'name' && participated && (
+        <div className="shell-foot">
+          <button className="shell-next" onClick={next}>CONTINUE →</button>
         </div>
       )}
       </React.Fragment>

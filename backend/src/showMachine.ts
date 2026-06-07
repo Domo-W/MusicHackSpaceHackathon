@@ -63,6 +63,9 @@ let pendingGenreOverride: { A: GenreInfo; B: GenreInfo } | null = null;
 // the end-of-set QR FRESH (a new connection) can still be shown the recap. Cleared
 // on reset and when a new collecting round begins (the set is live again).
 let endedRecap: SavedSong[] | null = null;
+// The songs generated DURING the current set (since start/reset). The end-of-set
+// recap shows only these — not every track ever archived across past sets.
+let setSongs: SavedSong[] = [];
 const songBpms = new Map<string, number>();
 
 let collectEndsAt = 0; // epoch ms when the current collecting window buzzes
@@ -128,6 +131,7 @@ export function reset(): void {
   autoGenrePairIndex = 0;
   pendingGenreOverride = null;
   endedRecap = null;
+  setSongs = [];
   genreA = { ...AUTO_GENRE_PAIRS[0]!.A };
   genreB = { ...AUTO_GENRE_PAIRS[0]!.B };
   if (gatherTimer) {
@@ -168,15 +172,12 @@ export async function endShow(): Promise<void> {
     clearTimeout(buzzerTimer);
     buzzerTimer = null;
   }
-  let songs: SavedSong[] = [];
-  try {
-    songs = await songStore.list();
-  } catch (err) {
-    console.error("[show] endShow — could not list saved songs:", (err as Error).message);
-  }
-  endedRecap = songs; // seed late scanners (new connections) with the recap
-  console.log(`[show] ended — broadcasting recap (${songs.length} tracks)`);
+  // Only THIS set's songs — not every track ever archived across past sets.
+  const songs: SavedSong[] = setSongs.slice();
+  endedRecap = songs; // seed late scanners (new connections) with this set's recap
+  console.log(`[show] ended — broadcasting recap (${songs.length} tracks from this set)`);
   broadcast({ type: "show_ended", songs });
+  broadcastShowState(); // started=false → dashboard re-enables "Start Show"
   broadcastTug();
 }
 
@@ -215,6 +216,8 @@ export function startShow(_opener?: { prompt: string; genre: string }): void {
   started = true;
   roundIndex = 0;
   held = false;
+  setSongs = []; // a fresh set — the recap reflects only what's made from here
+  endedRecap = null;
   // Stay on the name-cloud view from the start (phase "gathering", not "playing")
   // so there's no lobby→battle→lobby flicker. The fixed opener plays from silence;
   // its onPlaying opens the real 15s gather window (round 1), then voting.
@@ -531,6 +534,7 @@ async function generateNext(seed: Seed, opts?: { opener?: boolean }): Promise<vo
     console.log(`[show] ${id}: complete in ${(result.msToComplete / 1000).toFixed(1)}s`);
     try {
       const saved = await songStore.save(song, result.finalUrl);
+      setSongs.push(saved); // part of THIS set → shown in the end-of-set recap
       broadcast({ type: "song_saved", song: saved });
       console.log(`[show] ${id}: saved as ${saved.fileName}`);
     } catch (err) {
@@ -567,8 +571,46 @@ async function generateNext(seed: Seed, opts?: { opener?: boolean }): Promise<vo
   } catch (err) {
     console.error(`[show] ${id}: generation failed —`, (err as Error).message);
     failGeneration(err);
+    // Both attempts failed — keep the show moving with a previous-set track
+    // instead of looping the current one forever (unless this job was superseded).
+    if (isCurrentJob() && !playableSent && !opts?.opener) await playFallbackSong();
   } finally {
     releaseGate(); // safety: release if it errored before playable
+  }
+}
+
+/**
+ * Generation failed after retries — crossfade in a previously-archived song
+ * (preferring one from a PAST set) so the round advances and the stage isn't
+ * stuck on the "cooking" hold. No-op (current track keeps looping) if the
+ * archive is empty.
+ */
+async function playFallbackSong(): Promise<void> {
+  try {
+    const archive = await songStore.list();
+    const setIds = new Set(setSongs.map((s) => s.id));
+    const previous = archive.filter((s) => !setIds.has(s.id));
+    const pool = previous.length ? previous : archive;
+    if (!pool.length) {
+      console.warn("[show] generation failed and no archived song to fall back to — current track loops");
+      return;
+    }
+    const pick = pool[Math.floor(Math.random() * pool.length)]!;
+    const fallback: Song = {
+      id: `fallback-${Date.now()}-${++songSequence}`,
+      title: pick.title,
+      name: pick.name,
+      genre: pick.genre,
+      bpm: pick.bpm,
+      lyrics: pick.lyrics ?? "",
+      streamUrl: pick.downloadUrl,
+      finalUrl: pick.downloadUrl,
+    };
+    songBpms.set(fallback.id, pick.bpm);
+    console.log(`[show] generation failed — falling back to archived track "${pick.title}" by ${pick.name}`);
+    broadcast({ type: "song_ready", song: fallback });
+  } catch (err) {
+    console.error("[show] fallback song failed:", (err as Error).message);
   }
 }
 

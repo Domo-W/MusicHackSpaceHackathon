@@ -74,30 +74,24 @@ function ScreenRecap({ onBack, tracks: propTracks, playlistUrl }) {
   const [toast, setToast] = useState({ msg: '', show: false });
   const toastTimer = useRef(null);
   const curRef = useRef(currentId); curRef.current = currentId;
+  const audioRef = useRef(null);
+  const [dur, setDur] = useState(0); // real duration from the loaded audio
 
   useEffect(() => {
     const id = setTimeout(() => setStage(tracks.length ? 'ready' : 'empty'), 1400);
     return () => clearTimeout(id);
   }, [tracks.length]);
 
-  // mocked playback ticker — advances elapsed, auto-plays the next track
+  // Keep the audio element pointed at the current track (load on change; the
+  // play() calls happen from user-gesture handlers so mobile lets them through).
   useEffect(() => {
-    if (!playing) return;
-    const id = setInterval(() => {
-      setElapsed((e) => {
-        const cur = tracks.find((t) => t.id === curRef.current);
-        const dur = cur ? cur.dur : 0;
-        const ne = e + 0.25;
-        if (dur && ne >= dur) {
-          const idx = tracks.findIndex((t) => t.id === curRef.current);
-          if (idx < tracks.length - 1) { const nx = tracks[idx + 1]; curRef.current = nx.id; setCurrentId(nx.id); return 0; }
-          setPlaying(false); return dur;                                // reached end of set
-        }
-        return ne;
-      });
-    }, 250);
-    return () => clearInterval(id);
-  }, [playing, tracks]);
+    const a = audioRef.current;
+    const cur = tracks.find((t) => t.id === currentId);
+    if (!a || !cur) return;
+    const src = cur.downloadUrl || '';
+    if (src && a.getAttribute('src') !== src) { a.setAttribute('src', src); a.load(); }
+    setDur(isFinite(a.duration) ? a.duration : 0);
+  }, [currentId, tracks]);
 
   const ping = (msg) => {
     setToast({ msg, show: true }); haptic(12);
@@ -105,11 +99,32 @@ function ScreenRecap({ onBack, tracks: propTracks, playlistUrl }) {
     toastTimer.current = setTimeout(() => setToast((t) => ({ ...t, show: false })), 1900);
   };
 
-  const playTrack = (t) => {
-    if (t.id === currentId) { setPlaying((p) => !p); haptic(8); return; }
-    curRef.current = t.id; setCurrentId(t.id); setElapsed(0); setPlaying(true); haptic(10);
+  const startTrack = (t) => {
+    const a = audioRef.current; if (!a || !t) return;
+    a.src = t.downloadUrl || '';
+    a.play().catch(() => {});
+    curRef.current = t.id; setCurrentId(t.id); setElapsed(0);
   };
-  const masterToggle = () => { if (!currentId) return; setPlaying((p) => !p); haptic(10); };
+  const playTrack = (t) => {
+    haptic(8);
+    const a = audioRef.current; if (!a) return;
+    if (t.id === currentId) { a.paused ? a.play().catch(() => {}) : a.pause(); return; }
+    startTrack(t);
+  };
+  const masterToggle = () => {
+    const a = audioRef.current; if (!a) return; haptic(10);
+    const cur = tracks.find((t) => t.id === currentId) || tracks[0];
+    if (!cur) return;
+    if (a.paused) { if (curRef.current !== cur.id || !a.src) startTrack(cur); else a.play().catch(() => {}); }
+    else a.pause();
+  };
+  // when a track finishes, roll into the next one (gesture-free; may be blocked on
+  // some mobile browsers — tap-to-play always works, which is the reported bug).
+  const onTrackEnded = () => {
+    const idx = tracks.findIndex((t) => t.id === curRef.current);
+    if (idx > -1 && idx < tracks.length - 1) startTrack(tracks[idx + 1]);
+    else setPlaying(false);
+  };
 
   const saveOne = (t) => {
     if (savedIds[t.id]) return;
@@ -129,12 +144,21 @@ function ScreenRecap({ onBack, tracks: propTracks, playlistUrl }) {
   };
 
   const current = tracks.find((t) => t.id === currentId) || null;
-  const dur = current ? current.dur : 0;
-  const pct = dur ? Math.min(100, (elapsed / dur) * 100) : 0;
+  const effDur = dur || (current ? current.dur : 0); // real audio duration, fallback to placeholder
+  const pct = effDur ? Math.min(100, (elapsed / effDur) * 100) : 0;
   const masterLabel = playing ? 'PAUSE' : (elapsed > 0 ? 'RESUME' : 'PLAY ALL');
 
   return (
     <React.Fragment>
+      <audio
+        ref={audioRef}
+        preload="metadata"
+        onPlay={() => setPlaying(true)}
+        onPause={() => setPlaying(false)}
+        onTimeUpdate={(e) => setElapsed(e.target.currentTime || 0)}
+        onLoadedMetadata={(e) => setDur(isFinite(e.target.duration) ? e.target.duration : 0)}
+        onEnded={onTrackEnded}
+      />
       <div className="topbar">
         <span className="live-pill steady"><i className="live-dot" />SET COMPLETE</span>
         <span className="room-stat"><b>{tracks.length}</b>&nbsp;TRACKS</span>
@@ -214,7 +238,7 @@ function ScreenRecap({ onBack, tracks: propTracks, playlistUrl }) {
               </button>
               <div className="np-info">
                 <span className="np-title">{current.title}</span>
-                <span className="np-sub">by {current.by} · {fmt(elapsed)} / {fmt(dur)}</span>
+                <span className="np-sub">by {current.by} · {fmt(elapsed)} / {fmt(effDur)}</span>
               </div>
               <button className={'np-dl' + (savedIds[current.id] ? ' saved' : '')} onClick={() => saveOne(current)} aria-label="Download this track">
                 {savedIds[current.id] ? <CheckIcon /> : <DownloadIcon />}
