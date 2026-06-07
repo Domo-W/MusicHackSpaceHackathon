@@ -21,6 +21,7 @@
   let current = null;
   let pending = null;
   let crossTimer = null;
+  let fadeTimer = null;
   let crossing = false;
   let paused = false;
   let pausedAt = null;
@@ -83,37 +84,47 @@
     const from = current;
     const to = pending;
     pending = null;
+    if (crossTimer) { clearTimeout(crossTimer); crossTimer = null; }
     log(`⤬ transitioning ${from.song.id} → ${to.song.id}`);
 
+    // Time-based fade on a setInterval — NOT requestAnimationFrame. rAF is paused
+    // for hidden/background tabs, which would leave the swap (and onPlaying)
+    // hanging and `crossing` stuck, freezing the whole show on the current song.
+    // setInterval still fires when backgrounded (throttled to ~1s), and volume is
+    // derived from wall-clock time, so the swap always completes.
     const halfMs = Math.max(150, fadeSec * 500);
-    const fadeOutStarted = performance.now();
-    function fadeOut(t) {
-      const k = Math.min(1, (t - fadeOutStarted) / halfMs);
-      from.el.volume = Math.max(0, 1 - k);
-      if (k < 1) return requestAnimationFrame(fadeOut);
-
-      from.el.pause();
-      from.el.src = "";
-      voices.delete(from.song.id);
-      current = to;
-      to.el.volume = 0;
-      to.startedAt = now();
-      to.el.play().catch((e) => console.warn("play() blocked:", e.message));
-      onPlaying(to.song.id);
-      emitState();
-
-      const fadeInStarted = performance.now();
-      function fadeIn(nextT) {
-        const nextK = Math.min(1, (nextT - fadeInStarted) / halfMs);
-        to.el.volume = nextK;
-        if (nextK < 1) return requestAnimationFrame(fadeIn);
-        crossing = false;
-        log(`✓ now playing ${to.song.id}`);
-        maybeCross(); // in case the next one is already queued
+    const t0 = performance.now();
+    let swapped = false;
+    if (fadeTimer) clearInterval(fadeTimer);
+    fadeTimer = setInterval(function () {
+      const t = performance.now() - t0;
+      if (!swapped) {
+        from.el.volume = Math.max(0, 1 - Math.min(1, t / halfMs));
+        if (t >= halfMs) {
+          // SWAP — the must-happen transition (fires even when backgrounded).
+          from.el.pause();
+          from.el.src = "";
+          voices.delete(from.song.id);
+          current = to;
+          to.el.volume = 0;
+          to.startedAt = now();
+          to.el.play().catch((e) => console.warn("play() blocked:", e.message));
+          onPlaying(to.song.id);
+          emitState();
+          swapped = true;
+        }
+      } else {
+        to.el.volume = Math.min(1, (t - halfMs) / halfMs);
+        if (t >= halfMs * 2) {
+          to.el.volume = 1;
+          clearInterval(fadeTimer);
+          fadeTimer = null;
+          crossing = false;
+          log(`✓ now playing ${to.song.id}`);
+          maybeCross(); // in case the next one is already queued
+        }
       }
-      requestAnimationFrame(fadeIn);
-    }
-    requestAnimationFrame(fadeOut);
+    }, 50);
   }
 
   const AudioEngine = {
@@ -172,6 +183,8 @@
     reset() {
       if (crossTimer) clearTimeout(crossTimer);
       crossTimer = null;
+      if (fadeTimer) clearInterval(fadeTimer);
+      fadeTimer = null;
       voices.forEach((voice) => {
         voice.el.pause();
         voice.el.src = "";

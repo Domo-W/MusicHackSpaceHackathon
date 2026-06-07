@@ -172,6 +172,15 @@ function PhoneShell() {
     }
   }, [loading, screen, joined, participated, seq]);
 
+  // Returning participants are already joined, so submitting a name (Enter) on the
+  // re-entry screen won't fire a 'joined' event — phone-net calls this instead so
+  // Enter advances them just like a first-timer. Guarded to the name step so it
+  // can never double-advance past intent.
+  useEffect(() => {
+    window.__advanceFromName = () => setStep((s) => (seq[s] === 'name' ? Math.min(s + 1, seq.length - 1) : s));
+    return () => { if (window.__advanceFromName) delete window.__advanceFromName; };
+  }, [seq]);
+
   // INTENT step: focus the field as soon as it shows so the keyboard is up
   // (desktop). iOS needs a tap to open the soft keyboard — unavoidable there.
   useEffect(() => {

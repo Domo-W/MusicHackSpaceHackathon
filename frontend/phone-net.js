@@ -60,7 +60,16 @@
       const r = origAddWord(text);
       try {
         const t = String(text || '').trim();
-        if (t && !joinSent && !looksLikeEmoji(t)) submitName(t);
+        if (t && !looksLikeEmoji(t)) {
+          if (!joinSent) {
+            // first real name → join; the shell auto-advances on the 'joined' event.
+            submitName(t);
+          } else if (window.__advanceFromName) {
+            // returning participant (already joined): submitting a name on the
+            // re-entry screen advances them too, so they don't have to tap Continue.
+            window.__advanceFromName();
+          }
+        }
       } catch (e) {}
       return r;
     };

@@ -86,13 +86,8 @@ function ScreenTexture({ active }) {
         ))}
       </div>
 
-      {/* input dock (thumb zone) */}
+      {/* input dock (thumb zone) — emoji quick-taps removed (confusing, didn't add). */}
       <div className="dock">
-        <div className="emoji-row">
-          {TEX_EMOJI.map((em) => (
-            <button key={em} className="emoji-btn" onClick={() => tapEmoji(em)} aria-label={'add ' + em}>{em}</button>
-          ))}
-        </div>
         <form className="word-form" onSubmit={submit}>
           <input
             className="word-input"
