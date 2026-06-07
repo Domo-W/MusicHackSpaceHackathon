@@ -73,8 +73,15 @@
       if (collectSeconds != null) msg.collectSeconds = collectSeconds;
       Net.send(msg);
       if (!showState.started) {
-        Net.send({ type: "start" });
-        status("show started · " + msg.genreA.name + " vs " + msg.genreB.name);
+        var opener = (payload.opener || "").trim();
+        if (opener) {
+          // Start with a DJ opener: song-1 is generated from the brief in the Side A genre.
+          Net.send({ type: "start", opener: { prompt: opener, genre: msg.genreA.name } });
+          status("opener → " + msg.genreA.name + " · then the crowd votes");
+        } else {
+          Net.send({ type: "start" });
+          status("show started · " + msg.genreA.name + " vs " + msg.genreB.name);
+        }
       } else {
         status("next round genres · " + msg.genreA.name + " vs " + msg.genreB.name);
       }
@@ -191,12 +198,6 @@
       "border-top:1px solid rgba(255,255,255,.1);font-size:9px;letter-spacing:.12em;color:#8C8C9C;text-transform:uppercase}",
       ".dnp-timing input{width:64px;height:30px;padding:0 8px;background:#15151F;border:1px solid rgba(255,255,255,.18);",
       "border-radius:7px;color:#F4F4F8;font:500 11px 'JetBrains Mono',monospace;outline:none}",
-      ".dnp-opener{margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,.1)}",
-      ".dnp-opener-head{font:700 9px 'JetBrains Mono',monospace;letter-spacing:.14em;color:#8C8C9C;",
-      "text-transform:uppercase;margin-bottom:8px}.dnp-opener-genre,.dnp-opener-input{width:100%;height:34px;",
-      "margin-bottom:8px;padding:0 10px;background:#15151F;border:1px solid rgba(255,255,255,.18);border-radius:8px;",
-      "color:#F4F4F8;font:500 12px 'JetBrains Mono',monospace;outline:none;box-sizing:border-box}",
-      ".dnp-opener-input::placeholder{color:#5E5E6E}.dnp-opener-btn{width:100%;height:40px}",
       "#dashNetStatus{position:absolute;right:22px;bottom:5px;max-width:360px;overflow:hidden;text-overflow:ellipsis;",
       "white-space:nowrap;font-size:8px;letter-spacing:.08em;color:#8C8C9C;text-transform:uppercase}",
       "@media(max-width:900px){#dashNetBar{grid-template-columns:minmax(180px,1fr) auto auto;gap:12px;padding-inline:12px}",
@@ -313,36 +314,6 @@
     actionGrid.appendChild(makeBtn("Reset Show", "dnp-action dnp-action-danger", function () { Net.send({ type: "reset" }); status("show reset to lobby"); }));
     actionGrid.appendChild(makeBtn("End Show", "dnp-action dnp-action-danger", function () { Net.send({ type: "end" }); status("end show → recap"); }));
     actionsMenu.appendChild(actionGrid);
-
-    // ---- Set Opener: generate song-1 from a DJ brief, before any crowd input ----
-    var openerWrap = document.createElement("div");
-    openerWrap.className = "dnp-opener";
-    var openerHead = document.createElement("div");
-    openerHead.className = "dnp-opener-head";
-    openerHead.textContent = "Set Opener · first song";
-    openerWrap.appendChild(openerHead);
-    var openerGenre = document.createElement("select");
-    openerGenre.className = "dnp-opener-genre";
-    Object.keys(GENRE_NAMES).forEach(function (id) {
-      var o = document.createElement("option");
-      o.value = GENRE_NAMES[id];
-      o.textContent = GENRE_NAMES[id];
-      openerGenre.appendChild(o);
-    });
-    var openerInput = document.createElement("input");
-    openerInput.type = "text";
-    openerInput.className = "dnp-opener-input";
-    openerInput.placeholder = "opener brief — e.g. welcome to the show, lights down, here we go";
-    var openerBtn = makeBtn("▶ Generate opener & start", "dnp-action dnp-action-primary dnp-opener-btn", function () {
-      var prompt = openerInput.value.trim();
-      if (!prompt) { status("type an opener brief first"); openerInput.focus(); return; }
-      Net.send({ type: "start", opener: { prompt: prompt, genre: openerGenre.value } });
-      status("opener → generating · " + openerGenre.value);
-    });
-    openerWrap.appendChild(openerGenre);
-    openerWrap.appendChild(openerInput);
-    openerWrap.appendChild(openerBtn);
-    actionsMenu.appendChild(openerWrap);
 
     var secWrap = document.createElement("label");
     secWrap.className = "dnp-timing";

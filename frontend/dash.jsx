@@ -56,6 +56,14 @@ const DASH_CSS = `
   .sl-del.is-confirm { width: auto; padding: 0 12px; background: #FF4D6D; border-color: #FF4D6D; color: #0A0A0F; }
   .sl-empty { margin: auto; text-align: center; font-family: var(--mono); font-size: 13px; color: var(--dim-2); padding: 30px; }
   .sl-foot { font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; color: var(--dim); text-transform: uppercase; }
+  /* opener brief field in Panel 03 */
+  .opener-field { display: flex; flex-direction: column; gap: 7px; margin-bottom: 12px; }
+  .opener-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; color: var(--dim); text-transform: uppercase; }
+  .opener-label i { color: var(--dim-2); font-style: normal; text-transform: none; letter-spacing: 0.04em; }
+  .opener-input { height: 42px; padding: 0 14px; background: var(--surface-2); border: 1px solid var(--line-2);
+    border-radius: 10px; color: var(--text); font-family: var(--disp); font-size: 14px; outline: none; }
+  .opener-input:focus { border-color: var(--magenta); }
+  .opener-input::placeholder { color: var(--dim-2); }
 `;
 
 /* ===== PANEL 02 — SESSION SETLIST =====
@@ -137,6 +145,7 @@ function Setlist() {
 
 function App() {
   const [cards, setCards] = useState(['', '', '', '']);
+  const [opener, setOpener] = useState(''); // optional first-song (opener) brief
   const [sideA, setSideA] = useState('soca');
   const [sideB, setSideB] = useState('afrobeats');
   const [toast, setToast] = useState({ msg: '', color: '', show: false });
@@ -173,8 +182,8 @@ function App() {
   const pickA = (id) => { if (id !== sideB) setSideA(id); };
   const pickB = (id) => { if (id !== sideA) setSideB(id); };
   const startRound = () => {
-    pushToCrowd('tug-genres', { sideA, sideB });
-    showToast('Genres sent ✓', 'magenta');
+    pushToCrowd('tug-genres', { sideA, sideB, opener: opener.trim() });
+    showToast(opener.trim() ? 'Opener + genres sent ✓' : 'Genres sent ✓', 'magenta');
   };
   const gA = genreById(sideA), gB = genreById(sideB);
 
@@ -275,8 +284,18 @@ function App() {
               </div>
             </div>
             <div className="panel-foot">
+              <div className="opener-field">
+                <span className="opener-label">First song · opener brief <i>(optional — plays in {gA.name})</i></span>
+                <input
+                  className="opener-input"
+                  value={opener}
+                  maxLength={120}
+                  onChange={(e) => setOpener(e.target.value)}
+                  placeholder="e.g. welcome to the show, lights down, here we go"
+                />
+              </div>
               <button id="genreRoundButton" className="push-btn" onClick={startRound} style={{ '--accent': '#FF1A8C' }}>
-                Start show with selected genres
+                {opener.trim() ? 'Generate opener & start' : 'Start show with selected genres'}
               </button>
             </div>
           </div>
