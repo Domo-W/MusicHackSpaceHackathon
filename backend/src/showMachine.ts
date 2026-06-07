@@ -1,6 +1,6 @@
 import { CONFIG } from "./config.js";
 import { broadcast } from "./bus.js";
-import { craftSongPrompt } from "./agent.js";
+import { craftSongPrompt, craftOpenerPrompt } from "./agent.js";
 import { generateSong } from "./suno.js";
 import { songStore } from "./songStore.js";
 import { genreBpm } from "./tempo.js";
@@ -155,11 +155,21 @@ export async function endShow(): Promise<void> {
 }
 
 /** Dashboard pressed Start. Begin COLLECTING round 1 (cold start). */
-export function startShow(): void {
+export function startShow(opener?: { prompt: string; genre: string }): void {
   if (started) return;
   started = true;
   roundIndex = 0;
   held = false;
+  if (opener && opener.prompt.trim()) {
+    // Generate the DJ's opener as song-1 immediately. It plays first; the stage's
+    // onPlaying then triggers round 1 collecting (for song-2) — no initial silence.
+    const genre = opener.genre || genreA.name;
+    const seed: Seed = { name: "THE SHOW", answer: opener.prompt.trim(), genre };
+    activeSeed = seed;
+    console.log(`[show] starting with DJ opener — ${genre}: "${seed.answer}"`);
+    void generateNext(seed, { opener: true });
+    return;
+  }
   console.log("[show] starting — collecting round 1");
   beginCollecting();
 }
@@ -345,7 +355,7 @@ function resolveAndGenerate(): void {
  * as the song is PLAYABLE (streaming) — NOT when it fully completes — so the
  * next round can start while `complete` polling continues in the background.
  */
-async function generateNext(seed: Seed): Promise<void> {
+async function generateNext(seed: Seed, opts?: { opener?: boolean }): Promise<void> {
   if (generating) {
     console.log("[show] generateNext skipped — already generating");
     return;
@@ -387,8 +397,10 @@ async function generateNext(seed: Seed): Promise<void> {
 
   try {
     broadcast({ type: "generating", seed, roundIndex });
-    console.log(`[show] ${id}: crafting lyrics for ${seed.name} / ${seed.genre}`);
-    const prompt = await craftSongPrompt(seed);
+    console.log(`[show] ${id}: crafting ${opts?.opener ? "OPENER" : "lyrics"} for ${seed.name} / ${seed.genre}`);
+    const prompt = opts?.opener
+      ? await craftOpenerPrompt({ prompt: seed.answer, genre: seed.genre })
+      : await craftSongPrompt(seed);
 
     const song: Song = {
       id,

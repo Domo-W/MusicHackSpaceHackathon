@@ -143,7 +143,7 @@ wss.on("connection", (ws) => {
         onPlaying(msg.id);
         break;
       case "start":
-        startShow();
+        startShow(msg.opener);
         break;
       case "config":
         applyConfig(msg);

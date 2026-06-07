@@ -128,6 +128,97 @@ function normalizedStyle(style: string, genre: string, bpm: number): string {
   return [genre, `${bpm} BPM`, "4/4", descriptors].filter(Boolean).join(", ");
 }
 
+// ============================================================
+// SET OPENER — the FIRST track of the night, before any crowd input exists.
+// A different system prompt: it welcomes the whole ROOM (no single person's
+// name) from a freeform DJ brief, instead of chanting one participant's name.
+// ============================================================
+
+export interface OpenerSeed {
+  prompt: string; // the DJ's freeform brief for the opener
+  genre: string; // the genre the opener should be in
+}
+
+function openerSystemPrompt(genre: string, bpm: number): string {
+  return [
+    "You are the lyricist for the SET OPENER of 'Between Sets', a live party where the crowd's answers become AI songs.",
+    "This is the VERY FIRST track of the night — it plays before anyone has submitted anything, to set the energy and welcome the room.",
+    "Turn the DJ's brief into a high-energy, chantable opener that hypes the WHOLE crowd.",
+    "",
+    "FORMAT — replace every placeholder with original lyrics (the [Intro] is a CROWD chant, not a person's name):",
+    STRUCTURE_TEMPLATE,
+    "",
+    "Rules:",
+    "- Address the WHOLE ROOM / crowd. Do NOT invent or sing a specific person's name — use 'we', 'tonight', 'the room', and call-and-response crowd shouts.",
+    "- Build the [Chorus] as a short, super-repetitive, shoutable hook drawn from the DJ's brief.",
+    "- Use fresh wording tied to the brief; don't pad with stock party slogans that aren't in the brief.",
+    "- Use these exact section tags: [Intro], [Chorus], [Verse 1], [Verse 2], [Outro] (repeat [Chorus] between verses). Aim for ~6–8 sections so it runs long enough.",
+    `- The 'style' field MUST start with "${genre}, ${bpm} BPM, 4/4" followed by genre-appropriate production descriptors.`,
+    "- Keep it crowd-friendly: no slurs, hate, explicit sexual content, or targeted insults. If the brief is unsafe, transform it into something fun and inclusive.",
+    "Return ONLY the structured fields (title, lyrics, style).",
+  ].join("\n");
+}
+
+/** Deterministic fallback opener if the LLM call fails or is too slow. */
+export function templateOpener(seed: OpenerSeed): SongPrompt {
+  const genre = seed.genre || "House";
+  const bpm = genreBpm(genre);
+  const brief = seed.prompt.trim() || "Welcome to the show";
+  const chorus = `[Chorus]\nWelcome to the show, the night is ours\nHands up, ${brief}\nEverybody move, we're taking off`;
+  const sections = [
+    `[Intro]\nHey! Hey! THE SHOW! (let's go!)`,
+    chorus,
+    `[Verse 1]\nLights down low, the room is full\n${brief} — feel the pull`,
+    chorus,
+    `[Verse 2]\nNo names yet, just one big sound\nEverybody jumping, shake the ground`,
+    chorus,
+    `[Outro]\nTHE SHOW! THE SHOW! (one time!)`,
+  ];
+  return {
+    title: "THE SHOW — Opener",
+    lyrics: sections.join("\n"),
+    style: `${genre}, ${bpm} BPM, 4/4, genre-authentic groove, punchy drums, bright, set-opener energy`,
+  };
+}
+
+/** Craft a Suno prompt for the DJ's set opener. Falls back to a template on failure. */
+export async function craftOpenerPrompt(seed: OpenerSeed): Promise<SongPrompt> {
+  const genre = seed.genre || "House";
+  const bpm = genreBpm(genre);
+  try {
+    const res = await client.messages.create({
+      model: CONFIG.agentModel,
+      max_tokens: 2048,
+      system: openerSystemPrompt(genre, bpm),
+      output_config: {
+        format: { type: "json_schema", schema: SCHEMA },
+        effort: "low",
+      },
+      messages: [
+        {
+          role: "user",
+          content: [
+            `DJ opener brief: ${seed.prompt}`,
+            `Genre: ${genre}`,
+            `Target tempo: ${bpm} BPM`,
+            `Target sections: ${CONFIG.targetSections}`,
+          ].join("\n"),
+        },
+      ],
+    } as any);
+
+    const text = res.content.find((b) => b.type === "text");
+    if (!text || text.type !== "text") throw new Error("opener: no text block");
+    const parsed = JSON.parse(text.text) as SongPrompt;
+    if (!parsed.lyrics || !parsed.style) throw new Error("opener: incomplete output");
+    parsed.style = normalizedStyle(parsed.style, genre, bpm);
+    return parsed;
+  } catch (err) {
+    console.error("opener: falling back to template —", (err as Error).message);
+    return templateOpener(seed);
+  }
+}
+
 /** Craft a Suno prompt from the seed. Falls back to a template on any failure. */
 export async function craftSongPrompt(seed: SongSeed): Promise<SongPrompt> {
   const bpm = genreBpm(seed.genre);

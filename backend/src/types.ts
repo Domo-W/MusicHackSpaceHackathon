@@ -66,7 +66,7 @@ export type ClientMsg =
   // stage
   | { type: "playing"; id: string } // a song became the current track
   // dashboard control
-  | { type: "start" }
+  | { type: "start"; opener?: { prompt: string; genre: string } } // opener → generate song-1 from a DJ brief before round 1
   | { type: "config"; question?: string; genreA?: GenreInfo; genreB?: GenreInfo; collectSeconds?: number; genreOverride?: boolean }
   | { type: "skip" } // drop the queued/generating song, re-run the round
   | { type: "hold" } // keep current playing, pause advancing
