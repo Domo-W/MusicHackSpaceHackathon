@@ -356,11 +356,12 @@ function resolveAndGenerate(): void {
   const winnerSide: Side = tug.winner();
   const genre = winnerSide === "A" ? genreA.name : genreB.name;
   const { name, answer } = participants.selectRandomAnswerer();
+  const vibe = vibes.winner() ?? undefined; // the crowd's winning Pick-the-Vibe mood
 
   broadcast({ type: "round_result", winner: winnerSide, genre, name, answer, roundIndex });
-  console.log(`[show] round ${roundIndex} → ${winnerSide} (${genre}) — selected ${name}`);
+  console.log(`[show] round ${roundIndex} → ${winnerSide} (${genre})${vibe ? ` · vibe ${vibe}` : ""} — selected ${name}`);
 
-  const seed: Seed = { name, answer, genre };
+  const seed: Seed = { name, answer, genre, vibe };
   activeSeed = seed;
   generationError = undefined;
   void generateNext(seed);
@@ -417,6 +418,7 @@ async function generateNext(seed: Seed, opts?: { opener?: boolean }): Promise<vo
     const prompt = opts?.opener
       ? await craftOpenerPrompt({ prompt: seed.answer, genre: seed.genre })
       : await craftSongPrompt(seed);
+    console.log(`[show] ${id}: style → ${prompt.style}`);
 
     const song: Song = {
       id,

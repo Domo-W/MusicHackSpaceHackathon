@@ -8,6 +8,7 @@ export interface SongSeed {
   name: string; // the selected participant's name
   answer: string; // their answer to the performer's question
   genre: string; // the winning genre from the tug battle
+  vibe?: string; // the crowd's winning Pick-the-Vibe mood (colors energy + style)
 }
 
 export interface SongPrompt {
@@ -73,10 +74,13 @@ function systemPrompt(seed: SongSeed, bpm: number): string {
     "- Every song must use fresh, intent-specific wording. Do not add stock positivity or party slogans that were not present in the person's answer.",
     "- Repeat the custom chorus hook on purpose, but do not repeat generic verse lines just to fill space.",
     "- Use these exact section tags: [Intro], [Chorus], [Verse 1], [Verse 2], [Outro] (repeat [Chorus] between verses). Aim for ~6–8 sections so the song runs long enough.",
-    `- The 'style' field MUST start with "${seed.genre}, ${bpm} BPM, 4/4" followed by genre-appropriate production descriptors.`,
+    seed.vibe
+      ? `- THE CROWD'S WINNING VIBE TONIGHT IS "${seed.vibe}". Steer the song's mood, energy, and word choice toward that vibe, and reflect it in the 'style' production descriptors — while staying true to ${seed.name}'s intent.`
+      : "",
+    `- The 'style' field MUST start with "${seed.genre}, ${bpm} BPM, 4/4" followed by genre-appropriate production descriptors${seed.vibe ? ` that match a "${seed.vibe}" mood` : ""}.`,
     "- Keep it crowd-friendly: no slurs, hate, explicit sexual content, or targeted insults. If an intent is unsafe, transform it into something fun and inclusive (still keep the name).",
     "Return ONLY the structured fields (title, lyrics, style).",
-  ].join("\n");
+  ].filter(Boolean).join("\n");
 }
 
 function userPrompt(seed: SongSeed): string {
@@ -85,9 +89,10 @@ function userPrompt(seed: SongSeed): string {
     `Name: ${seed.name}`,
     `Their answer: ${seed.answer}`,
     `Winning genre: ${seed.genre}`,
+    seed.vibe ? `Crowd's winning vibe: ${seed.vibe}` : "",
     `Target tempo: ${bpm} BPM`,
     `Target sections: ${CONFIG.targetSections}`,
-  ].join("\n");
+  ].filter(Boolean).join("\n");
 }
 
 /** Case-insensitive check that the name is sung in the lyrics. */
@@ -114,8 +119,18 @@ export function templatePrompt(seed: SongSeed): SongPrompt {
   return {
     title: `${name}'s ${seed.genre} Anthem`,
     lyrics: sections.join("\n"),
-    style: `${seed.genre}, ${bpm} BPM, 4/4, genre-authentic groove, punchy drums, bright`,
+    style: `${seed.genre}, ${bpm} BPM, 4/4, genre-authentic groove, punchy drums, bright${seed.vibe ? `, ${seed.vibe.toLowerCase()} mood` : ""}`,
   };
+}
+
+/** Ensure the crowd's winning vibe is reflected in the Suno style (mood term). */
+function withVibeMood(style: string, vibe: string): string {
+  const v = vibe.trim();
+  if (!v) return style;
+  const escaped = v.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  // Don't duplicate if the model already wove the vibe word into the style.
+  if (new RegExp(`\\b${escaped}\\b`, "i").test(style)) return style;
+  return `${style}, ${v.toLowerCase()} mood`;
 }
 
 function normalizedStyle(style: string, genre: string, bpm: number): string {
@@ -245,6 +260,7 @@ export async function craftSongPrompt(seed: SongSeed): Promise<SongPrompt> {
       throw new Error(`agent: name "${seed.name}" missing from lyrics`);
     }
     parsed.style = normalizedStyle(parsed.style, seed.genre, bpm);
+    if (seed.vibe) parsed.style = withVibeMood(parsed.style, seed.vibe);
     return parsed;
   } catch (err) {
     console.error("agent: falling back to template —", (err as Error).message);

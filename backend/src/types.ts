@@ -8,6 +8,7 @@ export interface Seed {
   name: string;
   answer: string;
   genre: string;
+  vibe?: string; // the crowd's winning Pick-the-Vibe mood (colors the song)
 }
 
 export interface Song {

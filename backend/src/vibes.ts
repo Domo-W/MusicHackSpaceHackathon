@@ -47,6 +47,19 @@ export function tally(): { counts: number[]; total: number } {
   return { counts, total };
 }
 
+/** The most-picked option label (the crowd's chosen vibe), or null if no votes. */
+export function winner(): string | null {
+  const live = getCards();
+  if (live.length === 0) return null;
+  const { counts, total } = tally();
+  if (total === 0) return null;
+  let best = 0;
+  for (let i = 1; i < counts.length; i += 1) {
+    if ((counts[i] ?? 0) > (counts[best] ?? 0)) best = i;
+  }
+  return live[best] ?? null;
+}
+
 /** Blank slate (show reset). */
 export function reset(): void {
   cards = [];
