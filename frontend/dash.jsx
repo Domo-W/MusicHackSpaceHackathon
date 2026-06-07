@@ -114,7 +114,7 @@ function Setlist() {
             const now = s.id === currentId;
             return (
               <div className={'sl-row' + (now ? ' is-now' : '')} key={s.id}>
-                <div className="sl-num">{now ? '▶' : songs.length - i}</div>
+                <div className="sl-num">{now ? '▶' : String(i + 1).padStart(2, '0')}</div>
                 <div className="sl-copy">
                   <div className="sl-title">{s.title}</div>
                   <div className="sl-meta">{(now ? 'Now playing · ' : '') + s.genre + ' · ' + s.bpm + ' BPM · for ' + s.name}</div>
