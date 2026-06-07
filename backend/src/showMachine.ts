@@ -59,9 +59,9 @@ let generationError: string | undefined;
 let genreSource: "auto" | "dj" = "auto";
 let autoGenrePairIndex = 0;
 let pendingGenreOverride: { A: GenreInfo; B: GenreInfo } | null = null;
-// When the show has ended, the recap playlist is held here so a phone that scans
-// the end-of-set QR FRESH (a new connection) can still be shown the recap. Cleared
-// on reset and when a new collecting round begins (the set is live again).
+// When the show has ended, the recap points at that set's song array so a track
+// that was already streaming can still join the recap after its final file saves.
+// Cleared on reset and when a new collecting round begins (the set is live again).
 let endedRecap: SavedSong[] | null = null;
 // The songs generated DURING the current set (since start/reset). The end-of-set
 // recap shows only these — not every track ever archived across past sets.
@@ -179,8 +179,8 @@ export async function endShow(): Promise<void> {
     buzzerTimer = null;
   }
   // Only THIS set's songs — not every track ever archived across past sets.
-  const songs: SavedSong[] = setSongs.slice();
-  endedRecap = songs; // seed late scanners (new connections) with this set's recap
+  endedRecap = setSongs; // keep receiving any in-flight track from this set
+  const songs = endedRecap.slice();
   console.log(`[show] ended — broadcasting recap (${songs.length} tracks from this set)`);
   broadcast({ type: "show_ended", songs });
   broadcastShowState(); // started=false → dashboard re-enables "Start Show"
@@ -487,6 +487,7 @@ async function generateNext(seed: Seed, opts?: { opener?: boolean }): Promise<vo
   const epoch = generationEpoch;
   const jobId = ++generationJobSequence;
   const id = `song-${Date.now()}-${++songSequence}`;
+  const generationSetSongs = setSongs;
   activeGenerationJobId = jobId;
   latestGeneration = { jobId, songId: id };
   const bpm = genreBpm(seed.genre);
@@ -542,8 +543,13 @@ async function generateNext(seed: Seed, opts?: { opener?: boolean }): Promise<vo
     console.log(`[show] ${id}: complete in ${(result.msToComplete / 1000).toFixed(1)}s`);
     try {
       const saved = await songStore.save(song, result.finalUrl);
-      setSongs.push(saved); // part of THIS set → shown in the end-of-set recap
+      generationSetSongs.push(saved);
       broadcast({ type: "song_saved", song: saved });
+      if (endedRecap === generationSetSongs) {
+        const songs = endedRecap.slice();
+        broadcast({ type: "show_ended", songs });
+        console.log(`[show] ${id}: added to ended recap (${songs.length} tracks)`);
+      }
       console.log(`[show] ${id}: saved as ${saved.fileName}`);
     } catch (err) {
       console.error(`[show] ${id}: save failed —`, (err as Error).message);
