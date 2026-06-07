@@ -75,7 +75,13 @@ app.get("/api/songs/:id/download", async (req, res) => {
       res.status(404).json({ error: "Song not found." });
       return;
     }
-    res.download(saved.filePath, saved.song.fileName);
+    if (saved.url) {
+      res.redirect(saved.url); // Supabase Storage public URL
+    } else if (saved.filePath) {
+      res.download(saved.filePath, saved.song.fileName); // local file
+    } else {
+      res.status(404).json({ error: "Song file not found." });
+    }
   } catch (err) {
     console.error("[songs] download failed:", (err as Error).message);
     res.status(500).json({ error: "Could not download the saved song." });

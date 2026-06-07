@@ -2,37 +2,18 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { CONFIG } from "./config.js";
 import type { SavedSong, Song } from "./types.js";
+import {
+  SAFE_ID,
+  safeFilePart,
+  audioExtension,
+  type DownloadTarget,
+  type SongStore,
+} from "./songFiles.js";
+import { SupabaseSongStore } from "./supabaseSongStore.js";
 
-const SAFE_ID = /^[a-zA-Z0-9_-]+$/;
-
-function safeFilePart(value: string): string {
-  const cleaned = value
-    .normalize("NFKD")
-    .replace(/[^\w\s-]/g, "")
-    .trim()
-    .replace(/[\s_-]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  return cleaned.slice(0, 80) || "between-sets-song";
-}
-
-function audioExtension(sourceUrl: string, contentType: string | null): string {
-  const type = (contentType || "").toLowerCase();
-  if (type.includes("mp4") || type.includes("m4a")) return ".m4a";
-  if (type.includes("wav")) return ".wav";
-  if (type.includes("mpeg") || type.includes("mp3")) return ".mp3";
-
-  try {
-    const ext = path.extname(new URL(sourceUrl).pathname).toLowerCase();
-    if ([".mp3", ".m4a", ".wav", ".mp4"].includes(ext)) {
-      return ext === ".mp4" ? ".m4a" : ext;
-    }
-  } catch {
-    // Fall through to the common Suno audio format.
-  }
-  return ".mp3";
-}
-
-export class LocalSongStore {
+// Local-disk archive: audio file + a JSON metadata sidecar per song. The fallback
+// when Supabase is not configured (note: ephemeral on hosts like Render).
+export class LocalSongStore implements SongStore {
   constructor(private readonly rootDir = CONFIG.songsDir) {}
 
   async save(song: Song, sourceUrl: string): Promise<SavedSong> {
@@ -112,7 +93,7 @@ export class LocalSongStore {
     return true;
   }
 
-  async fileFor(id: string): Promise<{ song: SavedSong; filePath: string } | null> {
+  async fileFor(id: string): Promise<DownloadTarget | null> {
     if (!SAFE_ID.test(id)) return null;
     try {
       const song = JSON.parse(
@@ -128,4 +109,7 @@ export class LocalSongStore {
   }
 }
 
-export const songStore = new LocalSongStore();
+// Use Supabase when configured (durable), else local disk. Same interface either way.
+const useSupabase = Boolean(CONFIG.supabaseUrl && CONFIG.supabaseServiceKey);
+export const songStore: SongStore = useSupabase ? new SupabaseSongStore() : new LocalSongStore();
+console.log(`[songs] archive: ${useSupabase ? `Supabase (bucket "${CONFIG.supabaseBucket}")` : "local disk"}`);

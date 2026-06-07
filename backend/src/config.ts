@@ -34,10 +34,16 @@ export const CONFIG = {
   collectSeconds: Number(process.env.COLLECT_SECONDS ?? 50), // tug round / collection window
   targetSections: 6, // lyric sections → song length lever (calibrate at rehearsal)
 
-  // --- local song archive ---
-  // This is the current SongStore implementation. It can later be replaced by
-  // a Supabase-backed store without changing the generation pipeline.
+  // --- local song archive (fallback when Supabase is not configured) ---
   songsDir: path.resolve(process.env.SONGS_DIR || "data/songs"),
+
+  // --- Supabase (optional) ---
+  // When SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY are set, generated songs are
+  // persisted to a Storage bucket + a `songs` table instead of local disk (which
+  // is ephemeral on a host like Render). Same songStore interface either way.
+  supabaseUrl: process.env.SUPABASE_URL?.trim() || "",
+  supabaseServiceKey: process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() || "",
+  supabaseBucket: process.env.SUPABASE_BUCKET?.trim() || "songs",
 } as const;
 
 export type Config = typeof CONFIG;
