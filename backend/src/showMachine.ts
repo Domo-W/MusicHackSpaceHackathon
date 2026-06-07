@@ -108,6 +108,12 @@ export function currentRecap(): SavedSong[] | null {
   return endedRecap;
 }
 
+/** Songs generated during the CURRENT set (cleared on reset/start) — the
+ *  dashboard's Session Setlist, distinct from the full cross-set archive. */
+export function currentSetSongs(): SavedSong[] {
+  return setSongs.slice();
+}
+
 function broadcastShowState(): void {
   broadcast({ type: "show_state", ...currentShowState() });
 }

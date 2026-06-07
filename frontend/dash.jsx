@@ -160,7 +160,8 @@ function Setlist() {
   const [confirmId, setConfirmId] = useState(null);
   const confirmTimer = useRef(null);
 
-  const refresh = () => fetch('/api/songs')
+  // Only THIS set's songs (cleared on reset/start), not the whole cross-set archive.
+  const refresh = () => fetch('/api/session-songs')
     .then((r) => (r.ok ? r.json() : { songs: [] }))
     .then((d) => setSongs(Array.isArray(d.songs) ? d.songs : []))
     .catch(() => {});
@@ -171,8 +172,12 @@ function Setlist() {
     if (!N || !N.on) return;
     const offSaved = N.on('song_saved', refresh);
     const offDeleted = N.on('song_deleted', refresh);
+    // A new set (reset) or a fresh start empties the backend's set list — re-pull
+    // so the dashboard Session Setlist clears too.
+    const offReset = N.on('show_reset', refresh);
+    const offShow = N.on('show_state', (m) => { if (m && m.round <= 1) refresh(); });
     const offPlay = N.on('playback_state', (m) => setCurrentId(m && m.song ? m.song.id : null));
-    return () => { offSaved && offSaved(); offDeleted && offDeleted(); offPlay && offPlay(); };
+    return () => { offSaved && offSaved(); offDeleted && offDeleted(); offReset && offReset(); offShow && offShow(); offPlay && offPlay(); };
   }, []);
 
   const download = (s) => {

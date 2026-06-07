@@ -107,7 +107,7 @@ function ScreenIntent({ active, onAdvance }) {
             onFocus={() => setFocused(true)}
             onBlur={() => setFocused(false)}
             onKeyDown={onKey}
-            placeholder="…dance to something dark and hypnotic"
+            placeholder="…get lit!"
             rows={3}
             spellCheck={false}
             autoComplete="off"

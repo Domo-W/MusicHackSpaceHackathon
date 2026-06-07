@@ -21,6 +21,7 @@ import {
   handleAnswer,
   currentShowState,
   currentRecap,
+  currentSetSongs,
 } from "./showMachine.js";
 import { join, remove, names } from "./participants.js";
 import * as vibes from "./vibes.js";
@@ -68,6 +69,9 @@ app.get("/api/songs", async (_req, res) => {
     res.status(500).json({ error: "Could not list locally saved songs." });
   }
 });
+// Only the CURRENT set's songs (the dashboard Session Setlist) — cleared on
+// reset/start, so a new set starts with an empty list.
+app.get("/api/session-songs", (_req, res) => res.json({ songs: currentSetSongs() }));
 app.get("/api/songs/:id/download", async (req, res) => {
   try {
     const saved = await songStore.fileFor(req.params.id);

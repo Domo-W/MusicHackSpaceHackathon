@@ -33,7 +33,14 @@
     },
   });
 
-  Net.on("song_ready", function (m) { AudioEngine.ready(m.song); });
+  Net.on("song_ready", function (m) {
+    if (!m || !m.song) return;
+    // The opener marks a FRESH set — wipe any leftover audio (a looping song or a
+    // stuck crossfade carried over from a prior set) so the opener plays from
+    // silence and replaces the old track instead of being queued behind it.
+    if (String(m.song.id).indexOf("song-opener-") === 0 && AudioEngine.reset) AudioEngine.reset();
+    AudioEngine.ready(m.song);
+  });
   Net.on("song_final", function (m) { AudioEngine.final(m.id, m.finalUrl); });
   Net.on("song_cancelled", function (m) { if (AudioEngine.cancel) AudioEngine.cancel(m.id); });
   Net.on("show_reset", function () { if (AudioEngine.reset) AudioEngine.reset(); });
