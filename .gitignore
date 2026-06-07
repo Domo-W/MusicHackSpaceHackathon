@@ -21,3 +21,7 @@ data/songs/
 *.mp3
 *.wav
 *.m4a
+
+# supabase CLI link scaffolding (may hold connection info)
+supabase/.temp/
+supabase/.branches/
