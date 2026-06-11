@@ -63,7 +63,6 @@
   // sync with the backend genres live here.
   var tecName = document.getElementById("tecName");
   var dscName = document.getElementById("dscName");
-  var menuEl = document.getElementById("menu");
   var startShowBtn = document.getElementById("startShowBtn");
   var lobbyCodeEl = document.getElementById("lobbyCode");
   var lobbyQrImg = document.querySelector(".lobby-qr img");
@@ -213,7 +212,9 @@
   });
   Net.on("show_reset", function () {
     ended = false;
+    showStarted = false;
     document.body.classList.remove("ended");
+    applyStageState();
   });
 
   Net.on("tug", function (m) {
@@ -359,7 +360,7 @@
   function applyStageState() {
     var inShow = showStarted || roomState.lobbyState === "live";
     var showMenu = !inShow && (roomState.lobbyState === "closed" || roomState.lobbyState === "ended");
-    document.body.classList.toggle("menu", showMenu && !document.body.classList.contains("ended"));
+    document.body.classList.toggle("menu", showMenu && !ended);
     if (roomState.code && lobbyCodeEl) lobbyCodeEl.textContent = roomState.code;
     if (roomState.code && lobbyQrImg) {
       var want = "/qr?code=" + encodeURIComponent(roomState.code);
