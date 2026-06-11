@@ -27,3 +27,6 @@ data/songs/
 # supabase CLI link scaffolding (may hold connection info)
 supabase/.temp/
 supabase/.branches/
+
+# brainstorm companion sessions
+.superpowers/
