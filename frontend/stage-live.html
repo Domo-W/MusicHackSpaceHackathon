@@ -209,7 +209,12 @@
         url('assets/lobby-bg.jpg') center / cover no-repeat;
       align-items: center; justify-content: center; text-align: center; }
     body.menu #menu { display: flex; }
-    body.menu #lobby, body.menu #joinPanel, body.menu #viewport .overlay { display: none; }
+    /* The menu (z90) covers the lobby/battle/canvas below it; only the audio-gate
+       (z95) sits above, so hide just that on the landing menu — the START A SHOW
+       click is itself the audio-unlock gesture. (Don't display:none the canvas
+       here — it would zero the battle canvas's size before the show.) */
+    body.menu #lobby, body.menu #joinPanel, body.menu #viewport .overlay,
+    body.menu #audioGate { display: none; }
     .menu-inner { display: flex; flex-direction: column; align-items: center; gap: 22px; }
     .menu-wordmark { font-family: var(--disp); font-weight: 800; font-size: 92px; line-height: 0.98;
       letter-spacing: 0.04em; background: linear-gradient(90deg, #00E5FF, #FF1A8C);
@@ -227,7 +232,7 @@
       text-shadow: 0 0 40px rgba(0,229,255,0.4); }
   </style>
 </head>
-<body class="lobby">
+<body class="menu">
   <!-- Cold-start menu: the only thing a fresh visitor sees. START A SHOW mints a
        room. This click also unlocks audio on the page that plays the opener. -->
   <div id="menu">
