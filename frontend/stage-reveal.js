@@ -354,6 +354,9 @@
     if (audioUnlocked) return;
     audioUnlocked = true;
     try { var a = new Audio(); a.muted = true; var p = a.play(); if (p && p.catch) p.catch(function () {}); } catch (e) {}
+    // If a song already arrived but autoplay was blocked (no gesture yet),
+    // this click IS the gesture — retry it instead of staying silent.
+    if (window.AudioEngine && AudioEngine.unblock) AudioEngine.unblock();
     var gate = document.getElementById("audioGate");
     if (gate) gate.dataset.on = "0";
   }

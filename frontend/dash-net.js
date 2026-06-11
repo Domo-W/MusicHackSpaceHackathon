@@ -123,6 +123,12 @@
   var flowMeta = null;
   var actionsMenu = null;
   var startShowBtn = null;
+  // "Joined a show already in progress" banner: only shown when this pageload
+  // has NEVER seen the show idle — i.e. the backend was started before we
+  // arrived (zombie or parallel session), not by a button on this page.
+  var runningBanner = null;
+  var sawIdle = false;
+  var bannerDismissed = false;
   var endVoteBtn = null;
   var regenerateBtn = null;
   var holdBtn = null;
@@ -211,6 +217,13 @@
       "border-radius:7px;color:#F4F4F8;font:500 11px 'JetBrains Mono',monospace;outline:none}",
       "#dashNetStatus{position:absolute;right:22px;bottom:5px;max-width:360px;overflow:hidden;text-overflow:ellipsis;",
       "white-space:nowrap;font-size:8px;letter-spacing:.08em;color:#8C8C9C;text-transform:uppercase}",
+      ".dnp-running-banner{position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:60;display:none;align-items:center;gap:12px;",
+      "padding:10px 14px;background:#1A0F1A;border:1px solid #FF1A8C;border-radius:10px;box-shadow:0 12px 44px rgba(0,0,0,.6);",
+      "font:600 10px 'Space Grotesk',system-ui,sans-serif;letter-spacing:.08em;color:#F4F4F8;text-transform:uppercase}",
+      ".dnp-running-banner.is-on{display:flex}.dnp-running-banner b{color:#FF7A9F}",
+      ".dnp-running-banner button{height:28px;border-radius:7px;padding:0 10px;border:1px solid rgba(255,255,255,.2);background:#191923;",
+      "color:#F4F4F8;font:600 9px 'Space Grotesk',system-ui,sans-serif;letter-spacing:.08em;text-transform:uppercase;cursor:pointer}",
+      ".dnp-running-banner .dnp-banner-reset{background:#FF1A8C;border-color:#FF1A8C;color:#0A0A0F}",
       "@media(max-width:900px){#dashNetBar{grid-template-columns:minmax(180px,1fr) auto auto;gap:12px;padding-inline:12px}",
       ".dnp-flow{display:none}.dnp-actions{right:0}.dnp-art{width:44px;height:44px}.dnp-meta{display:none}}"
     ].join("");
@@ -365,6 +378,31 @@
     statusEl.id = "dashNetStatus";
     statusEl.textContent = "waiting";
     bar.appendChild(statusEl);
+
+    runningBanner = document.createElement("div");
+    runningBanner.className = "dnp-running-banner";
+    var bannerText = document.createElement("span");
+    var bannerStrong = document.createElement("b");
+    bannerStrong.textContent = "Show already in progress";
+    bannerText.appendChild(bannerStrong);
+    bannerText.appendChild(document.createTextNode(" — started before this page loaded"));
+    var bannerReset = document.createElement("button");
+    bannerReset.className = "dnp-banner-reset";
+    bannerReset.textContent = "Reset Show";
+    bannerReset.addEventListener("click", function () {
+      Net.send({ type: "reset" });
+      status("show reset to lobby");
+    });
+    var bannerDismiss = document.createElement("button");
+    bannerDismiss.textContent = "Keep running";
+    bannerDismiss.addEventListener("click", function () {
+      bannerDismissed = true;
+      updateActions();
+    });
+    runningBanner.appendChild(bannerText);
+    runningBanner.appendChild(bannerReset);
+    runningBanner.appendChild(bannerDismiss);
+    document.body.appendChild(runningBanner);
 
     document.body.appendChild(bar);
     updateFlow();
@@ -541,6 +579,10 @@
 
   function updateActions() {
     if (!startShowBtn) return;
+    if (!showState.started) sawIdle = true;
+    if (runningBanner) {
+      runningBanner.classList.toggle("is-on", showState.started && !sawIdle && !bannerDismissed);
+    }
     startShowBtn.disabled = showState.started;
     startShowBtn.title = showState.started ? "The show is already running" : "Begin round 1 voting";
     endVoteBtn.disabled = showState.phase !== "collecting";
