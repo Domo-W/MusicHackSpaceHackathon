@@ -203,7 +203,10 @@
 
     /* ---- COLD-START MENU ---- */
     #menu { position: fixed; inset: 0; z-index: 90; display: none;
-      background: radial-gradient(120% 90% at 50% 10%, rgba(180,140,255,0.12), transparent 60%), #07070B;
+      /* same venue photo as the sign-up lobby, dimmed so the wordmark reads */
+      background:
+        linear-gradient(rgba(6,6,10,0.40), rgba(6,6,10,0.58)),
+        url('assets/lobby-bg.jpg') center / cover no-repeat;
       align-items: center; justify-content: center; text-align: center; }
     body.menu #menu { display: flex; }
     body.menu #lobby, body.menu #joinPanel, body.menu #viewport .overlay { display: none; }
