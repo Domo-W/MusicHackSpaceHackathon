@@ -53,6 +53,12 @@ function PhoneShell() {
   const [ended, setEnded] = useState(false);   // show over -> ScreenRecap (merged from design-handoff)
   const [recapTracks, setRecapTracks] = useState([]);
   const [round, setRound] = useState(0);       // current backend round (drives per-round re-join)
+  const [needCode, setNeedCode] = useState(() => !window.PhoneRoom || (!window.PhoneRoom.hasCode() && !window.__participantId));
+  const [codeInput, setCodeInput] = useState('');
+  const [codeError, setCodeError] = useState('');
+  const [isHost, setIsHost] = useState(() => !!(window.PhoneRoom && window.PhoneRoom.isHost()));
+  const [hostName, setHostName] = useState(null);
+  const [started, setStarted] = useState(false); // reactive show-started flag (drives host buttons)
 
   const seq = participated ? SEQ_RETURNING : SEQ_NEW;
   const screen = seq[Math.min(step, seq.length - 1)];
@@ -112,6 +118,7 @@ function PhoneShell() {
     // Authoritative backend flow state — drives loading/reveal/walkthrough.
     const offShow = window.Net.on('show_state', (m) => {
       if (!m) return;
+      setStarted(!!(m && m.started));
       if (m.phase === 'idle') {
         formedRound.current = 0;
         setRound(0);
@@ -177,6 +184,21 @@ function PhoneShell() {
     }
   }, [round]);
 
+  // ---- host/room/rejection event subscriptions ----
+  useEffect(() => {
+    const onHost = () => setIsHost(!!(window.PhoneRoom && window.PhoneRoom.isHost()));
+    const onRoom = (e) => setHostName(e.detail ? e.detail.hostName : null);
+    const onRej = (e) => { setNeedCode(true); setCodeError(e.detail === 'busy' ? 'A show is already running' : 'Wrong code — try again'); };
+    window.addEventListener('bs:hoststate', onHost);
+    window.addEventListener('bs:roomstate', onRoom);
+    window.addEventListener('bs:joinrejected', onRej);
+    return () => {
+      window.removeEventListener('bs:hoststate', onHost);
+      window.removeEventListener('bs:roomstate', onRoom);
+      window.removeEventListener('bs:joinrejected', onRej);
+    };
+  }, []);
+
   // NAME step auto-advances the moment the join registers — typing your name and
   // submitting moves you to "I want to…". `joined` is reset every round, so this
   // fires fresh each time (no instant-skip) for everyone, new or returning.
@@ -195,6 +217,32 @@ function PhoneShell() {
       return () => clearTimeout(id);
     }
   }, [loading, screen]);
+
+  // ---- code gate: show before the name flow if no code is cached/from URL ----
+  if (needCode) {
+    return (
+      <div className="screen code-screen" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 14, padding: 20 }}>
+        <div className="screen-kicker" style={{ letterSpacing: '0.2em', opacity: 0.6 }}>ENTER ROOM CODE</div>
+        <input
+          value={codeInput}
+          onChange={(e) => { setCodeInput(e.target.value.toUpperCase().slice(0, 4)); setCodeError(''); }}
+          placeholder="CODE"
+          maxLength={4}
+          autoCapitalize="characters"
+          style={{ width: 160, textAlign: 'center', fontFamily: 'monospace', fontSize: 34, letterSpacing: '0.3em', padding: '12px 0', borderRadius: 12, border: '1px solid #333', background: '#15151F', color: '#00E5FF' }}
+        />
+        {codeError ? <div style={{ color: '#FF7A9F', fontSize: 13 }}>{codeError}</div> : null}
+        <button
+          onClick={() => {
+            if (codeInput.length !== 4) { setCodeError('4 letters'); return; }
+            window.PhoneRoom.setCode(codeInput);
+            setNeedCode(false);
+          }}
+          style={{ padding: '12px 30px', borderRadius: 999, border: 'none', background: '#00E5FF', color: '#0A0A0F', fontWeight: 700, letterSpacing: '0.06em' }}
+        >JOIN</button>
+      </div>
+    );
+  }
 
   // ---- render ----
   // The actual app surface. On real mobile it fills the screen directly; on desktop
@@ -225,6 +273,19 @@ function PhoneShell() {
         </div>
       </div>
 
+      {/* host controls — shown on the name screen pre-show, or End button during show */}
+      {!loading && screen === 'name' && !started && isHost ? (
+        <div className="shell-foot">
+          <button
+            onClick={() => window.PhoneRoom.startShow()}
+            style={{ marginTop: 14, padding: '14px 24px', borderRadius: 999, border: 'none', background: '#FF1A8C', color: '#0A0A0F', fontWeight: 700, letterSpacing: '0.05em', width: '100%' }}
+          >👑 EVERYBODY'S IN — START</button>
+        </div>
+      ) : null}
+      {!loading && screen === 'name' && !started && !isHost && hostName ? (
+        <div style={{ marginTop: 14, textAlign: 'center', fontSize: 12, color: '#8C8C9C', padding: '0 18px 12px' }}>waiting for {hostName} to start the show</div>
+      ) : null}
+
       {/* footer Next — only VIBE needs it (name auto-advances on join;
           intent self-advances on send; vote is round-driven) */}
       {!loading && screen === 'vibe' && (
@@ -232,6 +293,14 @@ function PhoneShell() {
           <button className="shell-next" onClick={next}>NEXT →</button>
         </div>
       )}
+
+      {/* End show button for host during an active show */}
+      {started && isHost ? (
+        <button
+          onClick={() => { if (confirm('End the show and go to the recap?')) window.PhoneRoom.endShow(); }}
+          style={{ position: 'fixed', bottom: 10, right: 10, padding: '8px 14px', borderRadius: 999, border: '1px solid #FF1A8C', background: 'transparent', color: '#FF7A9F', fontSize: 11, letterSpacing: '0.05em', zIndex: 30 }}
+        >End show</button>
+      ) : null}
       </React.Fragment>
       )}
     </div>
