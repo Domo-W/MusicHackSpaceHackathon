@@ -366,6 +366,9 @@
       var want = "/qr?code=" + encodeURIComponent(roomState.code);
       if (lobbyQrImg.getAttribute("src") !== want) lobbyQrImg.setAttribute("src", want);
     }
+    // Cursor: needed for the menu/lobby buttons (Start a show, etc.); hidden only
+    // once the show is live, where the stage is a pure projector with no controls.
+    setCursorHidden(inShow && !ended);
   }
 
   Net.on("room_state", function (m) {
@@ -407,7 +410,12 @@
   }
   document.addEventListener("click", unlockAudio);
 
-  // The cursor does nothing useful on the projector — hide it entirely.
-  document.documentElement.style.cursor = "none";
-  document.body.style.cursor = "none";
+  // The cursor is hidden ONLY during the live show (projector mode, no controls).
+  // On the menu/lobby the host needs it to click Start a show / interact. Driven
+  // by applyStageState() so it tracks the menu→lobby→show transitions.
+  function setCursorHidden(hidden) {
+    var v = hidden ? "none" : "";
+    document.documentElement.style.cursor = v;
+    document.body.style.cursor = v;
+  }
 })();
