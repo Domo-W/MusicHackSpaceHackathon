@@ -63,6 +63,12 @@
   // sync with the backend genres live here.
   var tecName = document.getElementById("tecName");
   var dscName = document.getElementById("dscName");
+  var menuEl = document.getElementById("menu");
+  var startShowBtn = document.getElementById("startShowBtn");
+  var lobbyCodeEl = document.getElementById("lobbyCode");
+  var lobbyQrImg = document.querySelector(".lobby-qr img");
+  var roomState = { code: null, lobbyState: "closed", hostName: null, crowd: 0 };
+  var showStarted = false;
 
   // ---- generating ticker: "crafting <name>'s song…" ----
   // Single shared timeout so rapid generating events don't stack.
@@ -345,6 +351,44 @@
   Net.on("name", function (m) { if (m && m.name) addName(m.name); });
   Net.on("names", function (m) { reconcile((m && m.names) || []); });
   showTeamSeed(); // seed immediately on load (the lobby is up before any join)
+
+  // ---- MENU / ROOM-LOBBY STATE MACHINE ----
+  // Resolve which big-screen state to show. Priority: finale > live show >
+  // open room lobby > cold menu. The existing tug/show_ended handlers own the
+  // finale + battle views; this only toggles the menu and the room lobby.
+  function applyStageState() {
+    var inShow = showStarted || roomState.lobbyState === "live";
+    var showMenu = !inShow && (roomState.lobbyState === "closed" || roomState.lobbyState === "ended");
+    document.body.classList.toggle("menu", showMenu && !document.body.classList.contains("ended"));
+    if (roomState.code && lobbyCodeEl) lobbyCodeEl.textContent = roomState.code;
+    if (roomState.code && lobbyQrImg) {
+      var want = "/qr?code=" + encodeURIComponent(roomState.code);
+      if (lobbyQrImg.getAttribute("src") !== want) lobbyQrImg.setAttribute("src", want);
+    }
+  }
+
+  Net.on("room_state", function (m) {
+    if (!m) return;
+    roomState = { code: m.code, lobbyState: m.lobbyState, hostName: m.hostName, crowd: m.crowd };
+    applyStageState();
+  });
+
+  Net.on("show_state", function (m) {
+    if (m) showStarted = !!m.started;
+    applyStageState();
+  });
+
+  if (startShowBtn) {
+    startShowBtn.addEventListener("click", function () {
+      Net.send({ type: "create_room" });
+      // The click is the audio-unlock gesture; retry any blocked playback later.
+      if (window.AudioEngine && AudioEngine.unblock) AudioEngine.unblock();
+    });
+  }
+
+  // Cold start: show the menu until room_state/show_state say otherwise.
+  document.body.classList.add("menu");
+  applyStageState();
 
   // ---- audio unlock: browsers block audio until a user gesture. The DJ starts
   // the show from the dashboard, so the stage just needs ONE click anywhere to
