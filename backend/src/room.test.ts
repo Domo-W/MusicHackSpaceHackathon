@@ -141,6 +141,43 @@ describe("room host authorization + lifecycle", () => {
     const res = room.leave("host");
     expect(res.hostChanged).toBe(false);
   });
+
+  it("clears stale hostKey when host leaves during live show — isHost returns false", () => {
+    const open = room.createRoom();
+    const c = open.ok ? open.code : "";
+    room.tryJoin("host", "Maya", c, undefined);
+    room.tryJoin("g1", "Theo", c, undefined);
+    room.markLive();
+    room.leave("host");
+    expect(room.isHost("host")).toBe(false);
+  });
+
+  it("a promoted host can reclaim via the newHostToken returned by leave()", () => {
+    const open = room.createRoom();
+    const c = open.ok ? open.code : "";
+    room.tryJoin("orig-host", "Maya", c, undefined);
+    room.tryJoin("next-host", "Theo", c, undefined);
+    const leaveRes = room.leave("orig-host");
+    expect(leaveRes.hostChanged).toBe(true);
+    if (!leaveRes.hostChanged) return;
+    const token = leaveRes.newHostToken ?? undefined;
+    // next-host reconnects with a fresh connection key but uses the promoted token
+    const rejoin = room.tryJoin("next-host-reconnect", "Theo", c, token);
+    expect(rejoin.ok).toBe(true);
+    if (rejoin.ok) expect(rejoin.isHost).toBe(true);
+  });
+
+  it("tryJoin in the ended state returns ok:true, isHost:false and ignores any token", () => {
+    const open = room.createRoom();
+    const c = open.ok ? open.code : "";
+    room.tryJoin("host", "Maya", c, undefined);
+    room.markLive();
+    room.markEnded();
+    // Even passing a previously valid token should not grant host
+    const res = room.tryJoin("late-comer", "Sam", c, "some-stale-token");
+    expect(res.ok).toBe(true);
+    if (res.ok) expect(res.isHost).toBe(false);
+  });
 });
 
 describe("empty-lobby watchdog", () => {

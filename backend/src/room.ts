@@ -1,7 +1,8 @@
 // backend/src/room.ts
+import { randomBytes } from "node:crypto";
 import { broadcast } from "./bus.js";
 
-type LobbyState = "closed" | "open" | "live" | "ended";
+export type LobbyState = "closed" | "open" | "live" | "ended";
 
 // 4-letter join code, Jackbox-style. Alphabet excludes I, L, O, 0, 1 so a code
 // read off a projector is never mistyped. Members are tracked by an opaque
@@ -26,7 +27,7 @@ function genCode(): string {
 }
 
 function genToken(): string {
-  return Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+  return randomBytes(32).toString("base64url");
 }
 
 function hostName(): string | null {
@@ -131,8 +132,10 @@ export function markLive(): void {
 }
 
 export function markEnded(): void {
-  lobbyState = "ended";
-  broadcastState();
+  if (lobbyState === "live" || lobbyState === "open") {
+    lobbyState = "ended";
+    broadcastState();
+  }
 }
 
 export function leave(connKey: string):
@@ -150,6 +153,14 @@ export function leave(connKey: string):
     hostToken = members.length > 0 ? genToken() : null;
     broadcastState();
     return { hostChanged: true, newHostKey: hostKey, newHostToken: hostToken };
+  }
+  // Host left during live/ended — clear the stale reference so isHost() stops
+  // returning true for a dead socket.
+  if (connKey === hostKey) {
+    hostKey = null;
+    hostToken = null;
+    broadcastState();
+    return { hostChanged: false };
   }
   if (idx >= 0) broadcastState();
   return { hostChanged: false };

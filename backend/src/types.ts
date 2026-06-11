@@ -3,6 +3,7 @@
 // Owned by the lead; gameplay/frontend agents import these, do not redefine.
 // See docs/client-api.md for the human-readable protocol + gameplay model.
 // ============================================================
+import type { LobbyState } from "./room.js";
 
 export interface Seed {
   name: string;
@@ -92,7 +93,7 @@ export type ServerMsg =
   | { type: "joined"; participantId: string; isHost?: boolean; hostToken?: string; code?: string | null }
   | { type: "join_rejected"; reason: string } // wrong/missing room code
   | { type: "host_granted"; hostToken: string } // promoted to host (e.g. prior host left)
-  | { type: "room_state"; code: string | null; lobbyState: "closed" | "open" | "live" | "ended"; hostName: string | null; crowd: number }
+  | { type: "room_state"; code: string | null; lobbyState: LobbyState; hostName: string | null; crowd: number }
   | { type: "name"; name: string } // a participant just joined — add to the name cloud
   | { type: "names"; names: string[] } // full snapshot (sent on connect; cleared on reset)
   | { type: "vibe_options"; cards: string[] } // the DJ's Pick-the-Vibe options (phones render these)
