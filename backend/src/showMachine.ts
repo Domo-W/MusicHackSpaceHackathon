@@ -1,5 +1,6 @@
 import { CONFIG } from "./config.js";
 import { broadcast } from "./bus.js";
+import * as room from "./room.js";
 import { craftSongPrompt, craftOpenerPrompt } from "./agent.js";
 import { generateSong } from "./suno.js";
 import { songStore } from "./songStore.js";
@@ -160,6 +161,7 @@ export function reset(): void {
     buzzerTimer = null;
   }
   tug.reset(genreA, genreB);
+  room.close();
   participants.reset();
   vibes.reset();
   console.log("[show] reset → blank lobby");
