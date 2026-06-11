@@ -22,10 +22,30 @@
   let joinSent = false;
   let pendingAnswer = null; // answer typed before join completes (see ordering note)
 
+  // Room code + host token survive reloads via sessionStorage, so a phone that
+  // refreshes (or re-joins each round) stays in the same room and keeps the crown.
+  function ssGet(k) { try { return sessionStorage.getItem(k) || null; } catch (e) { return null; } }
+  function ssSet(k, v) { try { if (v == null) sessionStorage.removeItem(k); else sessionStorage.setItem(k, v); } catch (e) {} }
+  // Seed the code from the QR URL (?code=XXXX) on first load.
+  (function seedCodeFromUrl() {
+    try {
+      var u = new URL(window.location.href);
+      var c = u.searchParams.get("code");
+      if (c) ssSet("bs_code", c.trim().toUpperCase());
+    } catch (e) {}
+  })();
+  window.__roomCode = ssGet("bs_code");
+  window.__isHost = false;
+  window.__hostName = null;
+
   if (window.Net && window.Net.on) {
     window.Net.on('joined', function (msg) {
       if (msg && msg.participantId != null) {
         window.__participantId = msg.participantId;
+        if (msg.isHost) window.__isHost = true;
+        if (msg.hostToken) ssSet("bs_hostToken", msg.hostToken);
+        if (msg.code) { window.__roomCode = msg.code; ssSet("bs_code", msg.code); }
+        window.dispatchEvent(new CustomEvent("bs:hoststate"));
         // Flush any answer that was typed before the join completed, now bound.
         if (pendingAnswer != null) {
           window.Net.send({ type: 'answer', participantId: window.__participantId, text: pendingAnswer });
@@ -43,7 +63,7 @@
     window.__participantName = n; // remembered so the intent screen can say "<NAME> wants to…"
     if (joinSent) return;
     joinSent = true;
-    if (window.Net) window.Net.send({ type: 'join', name: n });
+    if (window.Net) window.Net.send({ type: 'join', name: n, code: window.__roomCode || undefined, hostToken: ssGet("bs_hostToken") || undefined });
   }
   window.submitName = submitName;
 
@@ -122,6 +142,35 @@
     const index = cards.indexOf(card);
     if (index >= 0 && window.Net) window.Net.send({ type: 'vibe', index: index });
   });
+
+  Net.on("join_rejected", function (m) {
+    window.__joinRejected = (m && m.reason) || "bad_code";
+    // The join guard was set when the name was submitted; clear it so the user
+    // can fix the code and re-submit (otherwise submitName() no-ops forever).
+    if (window.__resetJoinState) window.__resetJoinState();
+    window.dispatchEvent(new CustomEvent("bs:joinrejected", { detail: window.__joinRejected }));
+  });
+  Net.on("host_granted", function (m) {
+    if (m && m.hostToken) ssSet("bs_hostToken", m.hostToken);
+    window.__isHost = true;
+    window.dispatchEvent(new CustomEvent("bs:hoststate"));
+  });
+  Net.on("room_state", function (m) {
+    if (!m) return;
+    window.__hostName = m.hostName;
+    window.__roomCrowd = m.crowd;
+    window.dispatchEvent(new CustomEvent("bs:roomstate", { detail: m }));
+  });
+  window.PhoneRoom = {
+    setCode: function (c) { window.__roomCode = (c || "").trim().toUpperCase(); ssSet("bs_code", window.__roomCode); },
+    hasCode: function () { return !!window.__roomCode; },
+    code: function () { return window.__roomCode; },
+    isHost: function () { return !!window.__isHost; },
+    hostName: function () { return window.__hostName; },
+    crowd: function () { return window.__roomCrowd || 0; },
+    startShow: function () { if (window.Net) window.Net.send({ type: "host_start" }); },
+    endShow: function () { if (window.Net) window.Net.send({ type: "host_end" }); },
+  };
 
   /* ============================================================
      SEAM NOTE FOR THE LEAD (flagged, not silently patched):
