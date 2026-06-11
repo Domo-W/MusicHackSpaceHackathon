@@ -25,6 +25,7 @@ import {
 } from "./showMachine.js";
 import { join, remove, names } from "./participants.js";
 import * as vibes from "./vibes.js";
+import * as room from "./room.js";
 import { songStore } from "./songStore.js";
 import type { ClientMsg, ServerMsg } from "./types.js";
 
@@ -107,7 +108,10 @@ app.delete("/api/songs/:id", async (req, res) => {
 });
 app.get("/qr", async (req, res) => {
   try {
-    const svg = await QRCode.toString(publicJoinUrl(req), { type: "svg", margin: 1, color: { dark: "#0A0A0F", light: "#FFFFFF" } });
+    let url = publicJoinUrl(req);
+    const c = room.snapshot().code;
+    if (c) url += (url.includes("?") ? "&" : "?") + "code=" + encodeURIComponent(c);
+    const svg = await QRCode.toString(url, { type: "svg", margin: 1, color: { dark: "#0A0A0F", light: "#FFFFFF" } });
     res.type("image/svg+xml").send(svg);
   } catch {
     res.status(500).send("qr error");
@@ -134,6 +138,10 @@ setSender((msg: ServerMsg) => {
 // Track which participantId each socket owns, for crowdSize + disconnect cleanup.
 const wsParticipant = new WeakMap<WebSocket, string>();
 let wsSeq = 0; // stable per-socket id for the vibe tally (distinct phones per option)
+// connKey (stringified per-socket id) → ws, so a host promotion can target the
+// newly-crowned phone with host_granted. WeakMap can't iterate, so use a Map and
+// clean it up on close.
+const wsByKey = new Map<string, WebSocket>();
 
 // Tally helpers shared by the vibe message + disconnect paths.
 const vibeTallyMsg = (): ServerMsg => {
@@ -143,11 +151,14 @@ const vibeTallyMsg = (): ServerMsg => {
 
 wss.on("connection", (ws) => {
   const socketId = ++wsSeq;
+  const connKey = String(socketId);
+  wsByKey.set(connKey, ws);
   console.log("[ws] client connected");
   // Seed the new client (e.g. a freshly-loaded stage) with the current names.
   ws.send(JSON.stringify({ type: "names", names: names() } as ServerMsg));
   ws.send(JSON.stringify(playbackState));
   ws.send(JSON.stringify({ type: "show_state", ...currentShowState() } as ServerMsg));
+  ws.send(JSON.stringify({ type: "room_state", ...room.snapshot() } as ServerMsg));
   // Seed the current vibe poll (options + live tally) so a fresh phone renders it.
   ws.send(JSON.stringify({ type: "vibe_options", cards: vibes.getCards() } as ServerMsg));
   ws.send(JSON.stringify(vibeTallyMsg()));
@@ -166,12 +177,25 @@ wss.on("connection", (ws) => {
 
     switch (msg.type) {
       case "join": {
+        const res = room.tryJoin(connKey, msg.name, msg.code, msg.hostToken);
+        if (!res.ok) {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: "join_rejected", reason: res.reason } as ServerMsg));
+          }
+          break;
+        }
         const id = join(msg.name);
         wsParticipant.set(ws, id);
-        const reply: ServerMsg = { type: "joined", participantId: id };
+        const reply: ServerMsg = {
+          type: "joined",
+          participantId: id,
+          isHost: res.isHost,
+          hostToken: res.hostToken,
+          code: room.snapshot().code,
+        };
         if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(reply));
         const nm = (msg.name || "").trim();
-        if (nm) broadcast({ type: "name", name: nm }); // grow the stage name cloud
+        if (nm) broadcast({ type: "name", name: nm });
         break;
       }
       case "answer":
@@ -195,6 +219,28 @@ wss.on("connection", (ws) => {
       case "start":
         startShow(msg.opener);
         break;
+      case "create_room": {
+        const r = room.createRoom();
+        if (!r.ok && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: "join_rejected", reason: "busy" } as ServerMsg));
+        }
+        break;
+      }
+      case "host_start": {
+        const s = room.snapshot();
+        if (room.isHost(connKey) && s.lobbyState === "open" && s.crowd >= 1) {
+          room.markLive();
+          startShow();
+        }
+        break;
+      }
+      case "host_end": {
+        if (room.isHost(connKey)) {
+          room.markEnded();
+          void endShow();
+        }
+        break;
+      }
       case "config":
         applyConfig(msg);
         break;
@@ -245,6 +291,14 @@ wss.on("connection", (ws) => {
       remove(id);
       wsParticipant.delete(ws);
     }
+    const promo = room.leave(connKey);
+    if (promo.hostChanged && promo.newHostKey) {
+      const newHostWs = wsByKey.get(promo.newHostKey);
+      if (newHostWs && newHostWs.readyState === WebSocket.OPEN && promo.newHostToken) {
+        newHostWs.send(JSON.stringify({ type: "host_granted", hostToken: promo.newHostToken } as ServerMsg));
+      }
+    }
+    wsByKey.delete(connKey);
     vibes.removeSocket(socketId);
     broadcast(vibeTallyMsg());
     console.log("[ws] client disconnected");

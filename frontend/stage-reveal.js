@@ -63,6 +63,12 @@
   // sync with the backend genres live here.
   var tecName = document.getElementById("tecName");
   var dscName = document.getElementById("dscName");
+  var startShowBtn = document.getElementById("startShowBtn");
+  var lobbyCodeEl = document.getElementById("lobbyCode");
+  var lobbyQrImg = document.querySelector(".lobby-qr img");
+  var lobbyBed = document.getElementById("lobbyBed");
+  var roomState = { code: null, lobbyState: "closed", hostName: null, crowd: 0 };
+  var showStarted = false;
 
   // ---- generating ticker: "crafting <name>'s song…" ----
   // Single shared timeout so rapid generating events don't stack.
@@ -207,7 +213,9 @@
   });
   Net.on("show_reset", function () {
     ended = false;
+    showStarted = false;
     document.body.classList.remove("ended");
+    applyStageState();
   });
 
   Net.on("tug", function (m) {
@@ -346,6 +354,75 @@
   Net.on("names", function (m) { reconcile((m && m.names) || []); });
   showTeamSeed(); // seed immediately on load (the lobby is up before any join)
 
+  // ---- MENU / ROOM-LOBBY STATE MACHINE ----
+  // Resolve which big-screen state to show. Priority: finale > live show >
+  // open room lobby > cold menu. The existing tug/show_ended handlers own the
+  // finale + battle views; this only toggles the menu and the room lobby.
+  function applyStageState() {
+    var inShow = showStarted || roomState.lobbyState === "live";
+    var showMenu = !inShow && (roomState.lobbyState === "closed" || roomState.lobbyState === "ended");
+    document.body.classList.toggle("menu", showMenu && !ended);
+    if (roomState.code && lobbyCodeEl) lobbyCodeEl.textContent = roomState.code;
+    if (roomState.code && lobbyQrImg) {
+      var want = "/qr?code=" + encodeURIComponent(roomState.code);
+      if (lobbyQrImg.getAttribute("src") !== want) lobbyQrImg.setAttribute("src", want);
+    }
+    // Cursor: needed for the menu/lobby buttons (Start a show, etc.); hidden only
+    // once the show is live, where the stage is a pure projector with no controls.
+    setCursorHidden(inShow && !ended);
+    // Calm lobby bed plays under the menu + sign-up lobby; it fades out the moment
+    // the show goes live so the hype opener has the floor.
+    updateLobbyBed(!inShow && !ended);
+  }
+
+  // The lobby bed can only start after a user gesture has unlocked audio (browser
+  // autoplay policy) — so it begins when the host clicks START A SHOW / any click.
+  var bedTargetOn = false;
+  var bedFade = null;
+  function updateLobbyBed(on) {
+    bedTargetOn = on;
+    if (!lobbyBed) return;
+    if (on && audioUnlocked) {
+      if (bedFade) { clearInterval(bedFade); bedFade = null; }
+      if (lobbyBed.paused) { lobbyBed.volume = 0; lobbyBed.play().catch(function () {}); }
+      bedFade = setInterval(function () {
+        lobbyBed.volume = Math.min(0.32, lobbyBed.volume + 0.02);
+        if (lobbyBed.volume >= 0.32) { clearInterval(bedFade); bedFade = null; }
+      }, 40);
+    } else {
+      if (bedFade) { clearInterval(bedFade); bedFade = null; }
+      if (!lobbyBed.paused) {
+        bedFade = setInterval(function () {
+          lobbyBed.volume = Math.max(0, lobbyBed.volume - 0.04);
+          if (lobbyBed.volume <= 0) { lobbyBed.pause(); clearInterval(bedFade); bedFade = null; }
+        }, 40);
+      }
+    }
+  }
+
+  Net.on("room_state", function (m) {
+    if (!m) return;
+    roomState = { code: m.code, lobbyState: m.lobbyState, hostName: m.hostName, crowd: m.crowd };
+    applyStageState();
+  });
+
+  Net.on("show_state", function (m) {
+    if (m) showStarted = !!m.started;
+    applyStageState();
+  });
+
+  if (startShowBtn) {
+    startShowBtn.addEventListener("click", function () {
+      Net.send({ type: "create_room" });
+      // The click is the audio-unlock gesture; retry any blocked playback later.
+      if (window.AudioEngine && AudioEngine.unblock) AudioEngine.unblock();
+    });
+  }
+
+  // Cold start: show the menu until room_state/show_state say otherwise.
+  document.body.classList.add("menu");
+  applyStageState();
+
   // ---- audio unlock: browsers block audio until a user gesture. The DJ starts
   // the show from the dashboard, so the stage just needs ONE click anywhere to
   // enable sound. A small banner hints at it; any click dismisses + unlocks. ----
@@ -354,12 +431,22 @@
     if (audioUnlocked) return;
     audioUnlocked = true;
     try { var a = new Audio(); a.muted = true; var p = a.play(); if (p && p.catch) p.catch(function () {}); } catch (e) {}
+    // If a song already arrived but autoplay was blocked (no gesture yet),
+    // this click IS the gesture — retry it instead of staying silent.
+    if (window.AudioEngine && AudioEngine.unblock) AudioEngine.unblock();
+    // This gesture also lets the calm lobby bed start (if the state wants it on).
+    updateLobbyBed(bedTargetOn);
     var gate = document.getElementById("audioGate");
     if (gate) gate.dataset.on = "0";
   }
   document.addEventListener("click", unlockAudio);
 
-  // The cursor does nothing useful on the projector — hide it entirely.
-  document.documentElement.style.cursor = "none";
-  document.body.style.cursor = "none";
+  // The cursor is hidden ONLY during the live show (projector mode, no controls).
+  // On the menu/lobby the host needs it to click Start a show / interact. Driven
+  // by applyStageState() so it tracks the menu→lobby→show transitions.
+  function setCursorHidden(hidden) {
+    var v = hidden ? "none" : "";
+    document.documentElement.style.cursor = v;
+    document.body.style.cursor = v;
+  }
 })();

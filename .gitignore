@@ -23,7 +23,11 @@ data/songs/
 *.m4a
 # ...except the committed static opener track the stage plays on show start
 !frontend/assets/opener.m4a
+!frontend/assets/lobby.m4a
 
 # supabase CLI link scaffolding (may hold connection info)
 supabase/.temp/
 supabase/.branches/
+
+# brainstorm companion sessions
+.superpowers/

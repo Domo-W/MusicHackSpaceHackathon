@@ -200,9 +200,48 @@
        doesn't show through; it fades back when the reveal clears. ---- */
     .overlay { transition: opacity .35s ease; }
     body.revealing .overlay { opacity: 0; }
+
+    /* ---- COLD-START MENU ---- */
+    #menu { position: fixed; inset: 0; z-index: 90; display: none;
+      /* same venue photo as the sign-up lobby, dimmed so the wordmark reads */
+      background:
+        linear-gradient(rgba(6,6,10,0.40), rgba(6,6,10,0.58)),
+        url('assets/lobby-bg.jpg') center / cover no-repeat;
+      align-items: center; justify-content: center; text-align: center; }
+    body.menu #menu { display: flex; }
+    body.menu #lobby, body.menu #joinPanel, body.menu #viewport .overlay { display: none; }
+    .menu-inner { display: flex; flex-direction: column; align-items: center; gap: 22px; }
+    .menu-wordmark { font-family: var(--disp); font-weight: 800; font-size: 92px; line-height: 0.98;
+      letter-spacing: 0.04em; background: linear-gradient(90deg, #00E5FF, #FF1A8C);
+      -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .menu-tag { font-family: var(--mono); font-size: 16px; letter-spacing: 0.22em; text-transform: uppercase;
+      color: rgba(255,255,255,0.55); }
+    .menu-cta { margin-top: 10px; padding: 18px 44px; border: none; border-radius: 999px; cursor: pointer;
+      background: #FF1A8C; color: #0A0A0F; font-family: var(--disp); font-weight: 700; font-size: 20px;
+      letter-spacing: 0.06em; box-shadow: 0 0 60px rgba(255,26,140,0.45); transition: transform .12s ease; }
+    .menu-cta:active { transform: scale(0.96); }
+    /* ---- LOBBY ROOM CODE ---- */
+    .lobby-code-wrap { display: flex; flex-direction: column; align-items: center; gap: 4px; margin-bottom: 6px; }
+    .lobby-code-kicker { font-family: var(--mono); font-size: 13px; letter-spacing: 0.3em; color: rgba(255,255,255,0.5); }
+    .lobby-code { font-family: var(--mono); font-weight: 700; font-size: 64px; letter-spacing: 0.3em; color: var(--cyan);
+      text-shadow: 0 0 40px rgba(0,229,255,0.4); }
   </style>
 </head>
 <body class="lobby">
+  <!-- Cold-start menu: the only thing a fresh visitor sees. START A SHOW mints a
+       room. This click also unlocks audio on the page that plays the opener. -->
+  <div id="menu">
+    <div class="menu-inner">
+      <div class="menu-wordmark">BETWEEN<br/>SETS</div>
+      <div class="menu-tag">the set your crowd writes itself</div>
+      <button id="startShowBtn" class="menu-cta">START A SHOW</button>
+    </div>
+  </div>
+
+  <!-- calm instrumental bed under the menu/sign-up lobby; fades out when the show
+       starts and the hype opener takes over (see stage-reveal.js lobby-bed logic) -->
+  <audio id="lobbyBed" src="assets/lobby.m4a" loop preload="auto"></audio>
+
   <!-- battlefront canvas lives OUTSIDE the scaled #stageRoot so it covers the
        full screen (no letterbox bars); the overlay below stays 16:9-centered. -->
   <canvas id="bf"></canvas>
@@ -299,6 +338,10 @@
     </div>
     <div class="lobby-join">
       <div class="lj-title">SCAN<br />TO JOIN</div>
+      <div class="lobby-code-wrap">
+        <div class="lobby-code-kicker">ROOM CODE</div>
+        <div id="lobbyCode" class="lobby-code">––––</div>
+      </div>
       <div class="lobby-qr"><img src="/qr" alt="scan to join" /></div>
       <div class="lobby-url" id="lobbyUrl">…</div>
       <div class="lobby-meta"><b id="lobbyCount">0</b> in the room</div>

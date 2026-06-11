@@ -1,5 +1,6 @@
 import { CONFIG } from "./config.js";
 import { broadcast } from "./bus.js";
+import * as room from "./room.js";
 import { craftSongPrompt, craftOpenerPrompt } from "./agent.js";
 import { generateSong } from "./suno.js";
 import { songStore } from "./songStore.js";
@@ -67,6 +68,13 @@ let endedRecap: SavedSong[] | null = null;
 // recap shows only these — not every track ever archived across past sets.
 let setSongs: SavedSong[] = [];
 const songBpms = new Map<string, number>();
+
+// Stale-show watchdog: if Start ran but no stage ever reports a track playing
+// (stage closed, autoplay blocked, song_ready missed), the show would sit in
+// "gathering · round 0" forever — and a later Start silently no-ops on the
+// `started` guard. Self-heal back to the lobby instead.
+const STARTUP_STALL_MS = 3 * 60_000;
+let startStallTimer: NodeJS.Timeout | null = null;
 
 let collectEndsAt = 0; // epoch ms when the current collecting window buzzes
 let gatherEndsAt = 0; // epoch ms when the name-cloud window opens voting
@@ -140,6 +148,10 @@ export function reset(): void {
   setSongs = [];
   genreA = { ...AUTO_GENRE_PAIRS[0]!.A };
   genreB = { ...AUTO_GENRE_PAIRS[0]!.B };
+  if (startStallTimer) {
+    clearTimeout(startStallTimer);
+    startStallTimer = null;
+  }
   if (gatherTimer) {
     clearTimeout(gatherTimer);
     gatherTimer = null;
@@ -149,6 +161,7 @@ export function reset(): void {
     buzzerTimer = null;
   }
   tug.reset(genreA, genreB);
+  room.close();
   participants.reset();
   vibes.reset();
   console.log("[show] reset → blank lobby");
@@ -170,6 +183,10 @@ export async function endShow(): Promise<void> {
   started = false;
   held = false;
   phase = "idle";
+  if (startStallTimer) {
+    clearTimeout(startStallTimer);
+    startStallTimer = null;
+  }
   if (gatherTimer) {
     clearTimeout(gatherTimer);
     gatherTimer = null;
@@ -229,6 +246,14 @@ export function startShow(_opener?: { prompt: string; genre: string }): void {
   // its onPlaying opens the real 15s gather window (round 1), then voting.
   phase = "gathering";
   console.log("[show] starting — fixed opener track, then gather → vote");
+  if (startStallTimer) clearTimeout(startStallTimer);
+  startStallTimer = setTimeout(() => {
+    startStallTimer = null;
+    if (started && lastPlayingId === "") {
+      console.warn("[show] no stage reported playing within stall window — auto-resetting zombie show");
+      reset();
+    }
+  }, STARTUP_STALL_MS);
   playOpenerTrack();
   broadcastShowState();
 }
@@ -245,6 +270,10 @@ export function onPlaying(id: string): void {
   if (!started) return;
   if (id === lastPlayingId) return;
   lastPlayingId = id;
+  if (startStallTimer) {
+    clearTimeout(startStallTimer);
+    startStallTimer = null;
+  }
   currentBpm = songBpms.get(id) ?? currentBpm;
   broadcast({ type: "now_playing", id });
   console.log(`[show] now playing ${id}`);

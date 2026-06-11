@@ -48,12 +48,24 @@
     return voice;
   }
 
+  // Start an element and only report onPlaying once playback ACTUALLY began.
+  // If the browser blocks autoplay (no user gesture yet) the show must not
+  // advance on a silent stage — unblock() retries on the first click.
+  function startPlayback(voice) {
+    const p = voice.el.play();
+    if (p && p.then) {
+      p.then(function () { onPlaying(voice.song.id); })
+        .catch(function (e) { console.warn("play() blocked:", e.message); });
+    } else {
+      onPlaying(voice.song.id);
+    }
+  }
+
   function makeCurrent(voice) {
     voice.el.volume = 1;
     voice.startedAt = now();
     current = voice;
-    voice.el.play().catch((e) => console.warn("play() blocked:", e.message));
-    onPlaying(voice.song.id);
+    startPlayback(voice);
     emitState();
     log(`▶ playing ${voice.song.id} — ${voice.song.name} · ${voice.song.genre}`);
   }
@@ -108,8 +120,7 @@
           current = to;
           to.el.volume = 0;
           to.startedAt = now();
-          to.el.play().catch((e) => console.warn("play() blocked:", e.message));
-          onPlaying(to.song.id);
+          startPlayback(to);
           emitState();
           swapped = true;
         }
@@ -160,10 +171,20 @@
       current.startedAt += pauseDuration;
       paused = false;
       pausedAt = null;
-      current.el.play().catch((e) => console.warn("play() blocked:", e.message));
+      startPlayback(current);
       emitState();
       maybeCross();
       log(`▶ resumed ${current.song.id}`);
+    },
+
+    // Retry playback that the browser blocked before any user gesture existed.
+    // Called from the stage's first-click audio unlock. Does nothing while the
+    // DJ has intentionally paused, or when audio is already running.
+    unblock() {
+      if (!current || paused || !current.el.paused) return;
+      log(`▶ retrying blocked playback of ${current.song.id}`);
+      startPlayback(current);
+      emitState();
     },
 
     // Remove a skipped song if it is queued. Never stop the current song here.

@@ -3,6 +3,7 @@
 // Owned by the lead; gameplay/frontend agents import these, do not redefine.
 // See docs/client-api.md for the human-readable protocol + gameplay model.
 // ============================================================
+import type { LobbyState } from "./room.js";
 
 export interface Seed {
   name: string;
@@ -64,7 +65,10 @@ export interface ShowState {
 // ---------------- client → server ----------------
 export type ClientMsg =
   // phone / audience
-  | { type: "join"; name: string }
+  | { type: "join"; name: string; code?: string; hostToken?: string }
+  | { type: "create_room" } // big screen → mint a lobby code
+  | { type: "host_start" } // host phone → start the show
+  | { type: "host_end" } // host phone → end the show
   | { type: "answer"; participantId: string; text: string }
   | { type: "pull"; participantId: string; side: Side; impulse: number } // tug tap (batched client-side ~250ms)
   | { type: "vibe"; index: number } // phone's current Pick-the-Vibe selection (option index)
@@ -86,7 +90,10 @@ export type ClientMsg =
 
 // ---------------- server → clients ----------------
 export type ServerMsg =
-  | { type: "joined"; participantId: string }
+  | { type: "joined"; participantId: string; isHost?: boolean; hostToken?: string; code?: string | null }
+  | { type: "join_rejected"; reason: string } // wrong/missing room code
+  | { type: "host_granted"; hostToken: string } // promoted to host (e.g. prior host left)
+  | { type: "room_state"; code: string | null; lobbyState: LobbyState; hostName: string | null; crowd: number }
   | { type: "name"; name: string } // a participant just joined — add to the name cloud
   | { type: "names"; names: string[] } // full snapshot (sent on connect; cleared on reset)
   | { type: "vibe_options"; cards: string[] } // the DJ's Pick-the-Vibe options (phones render these)
