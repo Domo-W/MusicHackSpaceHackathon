@@ -20,6 +20,7 @@ import WebSocket from "ws";
 const URL = process.argv[2] || "ws://localhost:8787";
 const N = Number(process.argv[3] || 60);
 const STAR = process.argv[4] || "Dupes";
+const CODE = process.argv[5] || process.env.ROOM_CODE || null; // optional room code for hosted lobbies
 
 const NAMES = [
   "Maya","Theo","Priya","Marcus","Lena","Andre","Sofia","Jules","Nico","Tash",
@@ -91,7 +92,7 @@ function makeClient(i) {
         // Staggered re-join: the wall fills over ~10s instead of all at once.
         setTimeout(() => {
           if (c.alive && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type: "join", name: pickShoutName(i) }));
+            ws.send(JSON.stringify({ type: "join", name: pickShoutName(i), code: CODE || undefined }));
             joins++;
           }
         }, jitter(300, 10000));
@@ -104,7 +105,7 @@ function makeClient(i) {
 }
 
 async function main() {
-  console.log(`[democrowd] target=${URL}  crowd=${N}  star="${STAR}"`);
+  console.log(`[democrowd] target=${URL}  crowd=${N}  star="${STAR}"  code=${CODE || "(none)"}`);
   console.log(`[democrowd] no control socket — drive the show from the DJ dashboard as normal.`);
   // Trickle in over ~12s, like people scanning the QR one after another.
   for (let i = 0; i < N; i++) { clients.push(makeClient(i)); await sleep(jitter(50, 350)); }
