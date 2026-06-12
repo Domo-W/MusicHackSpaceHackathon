@@ -141,6 +141,14 @@
       -webkit-background-clip: text; background-clip: text; color: transparent;
     }
     .lobby-tag { font-family: var(--disp); font-weight: 500; font-size: 26px; color: rgba(255,255,255,0.82); }
+    /* now-playing ticker under the title: scrolls the current generated song name */
+    .lobby-nowplaying { max-width: 640px; overflow: hidden; white-space: nowrap; height: 0; opacity: 0;
+      transition: opacity .4s ease, height .3s ease; }
+    .lobby-nowplaying[data-on="1"] { opacity: 1; height: 30px; }
+    .lobby-nowplaying span { display: inline-block; padding-left: 100%; animation: npscroll 16s linear infinite;
+      font-family: var(--mono); font-weight: 700; font-size: 19px; letter-spacing: 0.14em; color: var(--cyan);
+      text-shadow: 0 0 18px rgba(0,229,255,0.5); }
+    @keyframes npscroll { from { transform: translateX(0); } to { transform: translateX(-100%); } }
     .lobby-steps { display: flex; gap: 22px; margin-top: 4px; flex-wrap: wrap; }
     .lobby-steps span { font-family: var(--mono); font-size: 14px; letter-spacing: 0.03em; color: rgba(255,255,255,0.55); display: flex; align-items: center; gap: 8px; }
     .lobby-steps b { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.18); color: var(--cyan); font-size: 11px; }
@@ -341,6 +349,7 @@
       <div class="lobby-hero">
         <div class="lobby-kicker"><i></i> LIVE — AUDIENCE-GENERATED SET</div>
         <h1 class="lobby-title">BETWEEN<br />SETS</h1>
+        <div class="lobby-nowplaying" id="nowPlaying" data-on="0"><span id="npText"></span></div>
         <div class="lobby-tag">Your words become the next song.</div>
         <div class="lobby-steps">
           <span><b>1</b> Scan the code</span>

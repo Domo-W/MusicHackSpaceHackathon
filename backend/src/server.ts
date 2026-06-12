@@ -74,6 +74,32 @@ app.get("/api/songs", async (_req, res) => {
 // Only the CURRENT set's songs (the dashboard Session Setlist) — cleared on
 // reset/start, so a new set starts with an empty list.
 app.get("/api/session-songs", (_req, res) => res.json({ songs: currentSetSongs() }));
+// A persistent playlist for ONE set, so a "save the playlist" link/QR still works
+// after the show ends (and after later sessions). The setId is the epoch-ms time
+// of the set's first song; we cluster the archive the same way the dashboard does
+// (25-min gap) and return the matching set's songs, oldest-first.
+app.get("/api/playlist/:setId", async (req, res) => {
+  try {
+    const setId = Number(req.params.setId);
+    const all = await songStore.list();
+    const sorted = [...all].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    const GAP = 25 * 60 * 1000;
+    const sets: (typeof all)[] = [];
+    let cur: typeof all | null = null;
+    let last = 0;
+    for (const s of sorted) {
+      const t = Date.parse(s.createdAt);
+      if (!cur || t - last > GAP) { cur = []; sets.push(cur); }
+      cur.push(s);
+      last = t;
+    }
+    const set = sets.find((g) => g.some((s) => Date.parse(s.createdAt) === setId));
+    res.json({ songs: set ?? [] });
+  } catch (err) {
+    console.error("[playlist] failed:", (err as Error).message);
+    res.status(500).json({ error: "Could not load the playlist." });
+  }
+});
 app.get("/api/songs/:id/download", async (req, res) => {
   try {
     const saved = await songStore.fileFor(req.params.id);
@@ -110,8 +136,14 @@ app.delete("/api/songs/:id", async (req, res) => {
 app.get("/qr", async (req, res) => {
   try {
     let url = publicJoinUrl(req);
-    const c = room.snapshot().code;
-    if (c) url += (url.includes("?") ? "&" : "?") + "code=" + encodeURIComponent(c);
+    const set = typeof req.query.set === "string" ? req.query.set : "";
+    if (set) {
+      // "save the playlist" QR → the persistent recap for this set.
+      url += (url.includes("?") ? "&" : "?") + "set=" + encodeURIComponent(set);
+    } else {
+      const c = room.snapshot().code;
+      if (c) url += (url.includes("?") ? "&" : "?") + "code=" + encodeURIComponent(c);
+    }
     const svg = await QRCode.toString(url, { type: "svg", margin: 1, color: { dark: "#0A0A0F", light: "#FFFFFF" } });
     res.type("image/svg+xml").send(svg);
   } catch {

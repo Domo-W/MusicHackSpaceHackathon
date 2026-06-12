@@ -54,7 +54,10 @@ function PhoneShell() {
   const [ended, setEnded] = useState(false);   // show over -> ScreenRecap (merged from design-handoff)
   const [recapTracks, setRecapTracks] = useState([]);
   const [round, setRound] = useState(0);       // current backend round (drives per-round re-join)
-  const [needCode, setNeedCode] = useState(() => !window.PhoneRoom || (!window.PhoneRoom.hasCode() && !window.__participantId));
+  // ?set=<id> → open straight to the persistent playlist recap for that set.
+  const [playlistView] = useState(() => { try { return new URL(location.href).searchParams.get('set'); } catch (e) { return null; } });
+  const [playlistUrl, setPlaylistUrl] = useState(() => (typeof location !== 'undefined' ? location.href : ''));
+  const [needCode, setNeedCode] = useState(() => { try { if (new URL(location.href).searchParams.get('set')) return false; } catch (e) {} return !window.PhoneRoom || (!window.PhoneRoom.hasCode() && !window.__participantId); });
   const [codeInput, setCodeInput] = useState('');
   const [codeError, setCodeError] = useState('');
   const [isHost, setIsHost] = useState(() => !!(window.PhoneRoom && window.PhoneRoom.isHost()));
@@ -113,9 +116,15 @@ function PhoneShell() {
     // SET COMPLETE: the DJ ended the show. Flip to the recap playlist built from
     // the real saved songs in the broadcast payload (falls back to setlist.js).
     const offEnded = window.Net.on('show_ended', (m) => {
-      setRecapTracks(mapSavedSongs(m && m.songs));
+      const songs = (m && m.songs) || [];
+      setRecapTracks(mapSavedSongs(songs));
       setEnded(true);
       setLoading(false);
+      // A shareable link to THIS set's persistent playlist (its first song's time
+      // is the set id) so the recap can be revisited after the show / a refresh.
+      if (songs.length && songs[0].createdAt) {
+        setPlaylistUrl(location.origin + '/phone-live.html?set=' + Date.parse(songs[0].createdAt));
+      }
     });
     // a fresh show (reset / "start a new show") clears the recap AND the old join
     // so the phone is ready to join the NEW session cleanly from the name screen.
@@ -182,6 +191,15 @@ function PhoneShell() {
   }, []);
 
   const next = useCallback(() => setStep((s) => Math.min(s + 1, seq.length - 1)), [seq.length]);
+
+  // ?set=<id> — open straight to that set's persistent playlist recap (no join).
+  useEffect(() => {
+    if (!playlistView) return;
+    fetch('/api/playlist/' + encodeURIComponent(playlistView))
+      .then((r) => r.json())
+      .then((d) => { setRecapTracks(mapSavedSongs((d && d.songs) || [])); setEnded(true); })
+      .catch(() => {});
+  }, [playlistView]);
 
   // A new round (>1) clears everyone on the backend — re-join: forget the old id
   // and drop to the NAME screen so the user re-types their name into the mix.
@@ -333,7 +351,7 @@ function PhoneShell() {
       <Background />
 
       {ended ? (
-        <ScreenRecap tracks={recapTracks} onBack={() => setEnded(false)} />
+        <ScreenRecap tracks={recapTracks} onBack={() => setEnded(false)} playlistUrl={playlistUrl} />
       ) : (
       <React.Fragment>
       <ShellProgress seq={seq} step={step} loading={loading} />

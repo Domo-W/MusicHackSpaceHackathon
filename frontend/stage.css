@@ -85,6 +85,10 @@ html, body { height: 100%; background: #000; overflow: hidden; font-family: var(
   align-items: center; justify-content: center; gap: 20px; opacity: 0; pointer-events: none;
 }
 .win-flash[data-on="1"] { animation: wflash 2.9s ease-out forwards; }
+/* The "next song is for…" reveal card already shows the winning genre, and it
+   fires at the same moment — so suppress the win-flash while the reveal is up,
+   otherwise the bright flash bleeds through the reveal's dark backdrop. */
+body.revealing .win-flash { opacity: 0 !important; animation: none !important; }
 .wf-name { font-family: var(--disp); font-weight: 700; font-size: 200px; line-height: 0.85; color: #050507; text-transform: uppercase; letter-spacing: -0.03em; white-space: nowrap; }
 .wf-sub { font-family: var(--mono); font-size: 40px; font-weight: 700; letter-spacing: 0.3em; color: #050507; }
 @keyframes wflash { 0% { opacity: 0; } 8% { opacity: 1; } 86% { opacity: 1; } 100% { opacity: 0; } }

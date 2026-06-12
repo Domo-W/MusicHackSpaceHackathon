@@ -30,8 +30,26 @@
         position: state.position || 0,
         duration: state.duration || 0,
       });
+      updateNowPlaying(state);
     },
   });
+
+  // Now-playing ticker under the BETWEEN SETS title — shows the current GENERATED
+  // song (not the fixed opener) while it plays.
+  var nowPlayingEl = document.getElementById("nowPlaying");
+  var npTextEl = document.getElementById("npText");
+  function updateNowPlaying(state) {
+    if (!nowPlayingEl || !npTextEl) return;
+    var s = state && state.playing ? state.song : null;
+    var isOpener = s && (s.name === "BETWEEN SETS" || /opener/i.test(s.id || "") || /opener/i.test(s.title || ""));
+    if (s && s.title && !isOpener) {
+      var line = "♪ NOW PLAYING — " + s.title + (s.name ? " · for " + s.name : "");
+      npTextEl.textContent = line + "      •      " + line; // doubled so the scroll loop reads continuous
+      nowPlayingEl.dataset.on = "1";
+    } else {
+      nowPlayingEl.dataset.on = "0";
+    }
+  }
 
   Net.on("song_ready", function (m) {
     if (!m || !m.song) return;
@@ -216,6 +234,13 @@
     if (endTracksEl) endTracksEl.textContent = tracks.length;
     if (endCrowdEl) endCrowdEl.textContent = lastCrowd;
     buildCredits(tracks);
+    // Point the "save the playlist" QR + URL at the PERSISTENT recap for this set
+    // (its first song's time is the set id), so it survives refreshes/new sessions.
+    var setId = tracks.length ? Date.parse(tracks[0].createdAt) : null;
+    var endedQr = document.querySelector("#ended .lobby-qr img");
+    var endedUrlEl = document.getElementById("endedUrl");
+    if (setId && endedQr) endedQr.setAttribute("src", "/qr?set=" + setId);
+    if (endedUrlEl) endedUrlEl.textContent = location.host + "/phone-live.html" + (setId ? "?set=" + setId : "");
     document.body.classList.remove("lobby");
     document.body.classList.add("ended");
     applyStageState(); // show the cursor (finale has the "new show" button)
