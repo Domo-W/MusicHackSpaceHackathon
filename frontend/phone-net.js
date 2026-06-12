@@ -159,6 +159,30 @@
     if (!m) return;
     window.__hostName = m.hostName;
     window.__roomCrowd = m.crowd;
+    // SELF-HEAL: this backend has exactly one room, and the server tells every
+    // phone its current code on connect + on every change. So always sync to the
+    // room that is actually open/live — never depend on the QR carrying a code or
+    // on a cached one. This makes a bare phone-live.html link join the current
+    // room, and a tab left open across a host restart re-join the NEW room.
+    if ((m.lobbyState === "open" || m.lobbyState === "live") && m.code) {
+      if (window.__roomCode !== m.code) {
+        var hadJoined = !!window.__participantId || joinSent;
+        window.__roomCode = m.code;
+        ssSet("bs_code", m.code);
+        if (hadJoined) {
+          // We were in a now-defunct room — drop stale identity and re-join the
+          // new one with the name we already have.
+          ssSet("bs_hostToken", null);
+          window.__isHost = false;
+          if (window.__resetJoinState) window.__resetJoinState();
+          if (window.__participantName && window.Net) {
+            joinSent = true;
+            window.Net.send({ type: "join", name: window.__participantName, code: m.code });
+          }
+          window.dispatchEvent(new CustomEvent("bs:hoststate"));
+        }
+      }
+    }
     window.dispatchEvent(new CustomEvent("bs:roomstate", { detail: m }));
   });
   window.PhoneRoom = {

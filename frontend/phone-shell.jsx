@@ -187,7 +187,16 @@ function PhoneShell() {
   // ---- host/room/rejection event subscriptions ----
   useEffect(() => {
     const onHost = () => setIsHost(!!(window.PhoneRoom && window.PhoneRoom.isHost()));
-    const onRoom = (e) => setHostName(e.detail ? e.detail.hostName : null);
+    const onRoom = (e) => {
+      const m = e.detail;
+      setHostName(m ? m.hostName : null);
+      // Self-heal: a room is open/live → phone-net has adopted its code, so skip
+      // the manual code screen and let the user join the current room.
+      if (m && (m.lobbyState === 'open' || m.lobbyState === 'live') && m.code) {
+        setCodeError('');
+        setNeedCode(false);
+      }
+    };
     const onRej = (e) => { setNeedCode(true); setCodeError(e.detail === 'busy' ? 'A show is already running' : 'Wrong code — try again'); };
     window.addEventListener('bs:hoststate', onHost);
     window.addEventListener('bs:roomstate', onRoom);
