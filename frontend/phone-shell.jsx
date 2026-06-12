@@ -212,11 +212,16 @@ function PhoneShell() {
   // submitting moves you to "I want to…". `joined` is reset every round, so this
   // fires fresh each time (no instant-skip) for everyone, new or returning.
   useEffect(() => {
-    if (!loading && screen === 'name' && joined) {
+    // Auto-advance name → intent ONLY once the show has started. Before the host
+    // presses START, the name screen IS the lobby: the user shouts a name and
+    // waits, and the host needs their START button (which lives on this screen) to
+    // stay put. Advancing pre-show would strand the host on intent/vote with no
+    // way to start, and intent/vote do nothing while no round is running.
+    if (!loading && screen === 'name' && joined && started) {
       const id = setTimeout(() => setStep((s) => (seq[s] === 'name' ? Math.min(s + 1, seq.length - 1) : s)), 400);
       return () => clearTimeout(id);
     }
-  }, [loading, screen, joined, seq]);
+  }, [loading, screen, joined, seq, started]);
 
   // INTENT step: focus the field as soon as it shows so the keyboard is up
   // (desktop). iOS needs a tap to open the soft keyboard — unavoidable there.
