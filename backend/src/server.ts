@@ -232,14 +232,14 @@ wss.on("connection", (ws) => {
         const s = room.snapshot();
         // A show needs at least MIN_PLAYERS in the room (host + ≥1 other). The
         // phone hides START below this, but enforce it server-side too.
-        if (room.isHost(connKey) && s.lobbyState === "open" && s.crowd >= MIN_PLAYERS) {
+        if (room.authorizeHost(connKey, msg.hostToken) && s.lobbyState === "open" && s.crowd >= MIN_PLAYERS) {
           room.markLive();
           startShow();
         }
         break;
       }
       case "host_end": {
-        if (room.isHost(connKey)) {
+        if (room.authorizeHost(connKey, msg.hostToken)) {
           room.markEnded();
           void endShow();
         }

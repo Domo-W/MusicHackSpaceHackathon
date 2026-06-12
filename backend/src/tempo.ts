@@ -2,6 +2,7 @@ import { CONFIG } from "./config.js";
 
 const GENRE_BPMS: Array<[RegExp, number]> = [
   [/\bdrum\s*(?:and|&|n)\s*bass\b|\bdnb\b/i, 174],
+  [/\bdubstep\b/i, 140],
   [/\bsoca\b/i, 130],
   [/\btechno\b/i, 130],
   [/\bpop\s*rock\b/i, 128],
@@ -10,6 +11,7 @@ const GENRE_BPMS: Array<[RegExp, number]> = [
   [/\bpop\b/i, 120],
   [/\bfunk\b/i, 115],
   [/\bafro\s*beats?\b|\bafrobeats?\b/i, 110],
+  [/\bfolk\b/i, 108],
   [/\bcountry\b/i, 104],
   [/\bdancehall\b/i, 100],
   [/\bsoul\b/i, 96],

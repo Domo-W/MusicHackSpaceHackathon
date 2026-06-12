@@ -17,6 +17,11 @@ const GENRES = [
   { id: 'country', emoji: '🤠', name: 'Country' },
   { id: 'poprock', emoji: '🎸', name: 'Pop Rock' },
   { id: 'tropicalhouse', emoji: '🏝️', name: 'Tropical House' },
+  { id: 'hiphop', emoji: '🎤', name: 'Hip-Hop' },
+  { id: 'techno', emoji: '🛸', name: 'Techno' },
+  { id: 'soul', emoji: '💜', name: 'Soul' },
+  { id: 'dubstep', emoji: '🔊', name: 'Dubstep' },
+  { id: 'folk', emoji: '🪕', name: 'Folk' },
 ];
 const genreById = (id) => GENRES.find((g) => g.id === id);
 

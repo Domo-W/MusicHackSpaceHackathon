@@ -54,7 +54,7 @@
     .vs-kicker { text-align:center; font:700 12px/1 'JetBrains Mono',monospace; letter-spacing:0.16em; color:rgba(255,255,255,0.5); flex:0 0 auto; }
     /* vote countdown timer (top of the voting screen) */
     .vs-timer { flex:0 0 auto; display:flex; flex-direction:column; gap:6px; padding:0 2px; }
-    .vs-timer-head { display:flex; justify-content:space-between; align-items:baseline; font:700 12px/1 'JetBrains Mono',monospace; letter-spacing:0.14em; color:rgba(255,255,255,0.6); text-transform:uppercase; }
+    .vs-timer-head { display:flex; justify-content:flex-start; gap:10px; align-items:baseline; font:700 12px/1 'JetBrains Mono',monospace; letter-spacing:0.14em; color:rgba(255,255,255,0.6); text-transform:uppercase; padding-right:96px; }
     .vs-timer-num { font:800 18px/1 'Space Grotesk',sans-serif; color:#fff; }
     .vs-timer-bar { width:100%; height:8px; border-radius:999px; background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.14); overflow:hidden; }
     .vs-timer-bar i { display:block; height:100%; border-radius:999px; background:linear-gradient(90deg, var(--cyan,#00E5FF), #fff, var(--magenta,#FF1A8C)); box-shadow:0 0 14px rgba(255,255,255,0.5); transition:width .25s linear; }
@@ -133,12 +133,12 @@
   <!-- merged from design-handoff: the end-of-set recap (playlist player) -->
   <script src="setlist.js?v=1"></script>
   <script type="text/babel" src="screen-recap.jsx?v=1"></script>
-  <script type="text/babel" src="phone-shell.jsx?v=8"></script>
+  <script type="text/babel" src="phone-shell.jsx?v=9"></script>
 
   <!-- phone glue: join (NAME) + answer (INTENT). Loaded LAST.
        Plain vanilla JS (no Babel) — net.js/net-crowd.js are plain scripts
        above it so its CrowdSim.addWord patch applies immediately; the
        IntentSink wrap retries until screen-intent.jsx's Babel module runs. -->
-  <script src="phone-net.js?v=3"></script>
+  <script src="phone-net.js?v=4"></script>
 </body>
 </html>

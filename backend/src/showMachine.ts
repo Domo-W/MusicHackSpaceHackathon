@@ -27,18 +27,45 @@ const genre = (key: Side, name: string, short: string): GenreInfo => ({
   short,
   color: key === "A" ? "#00E5FF" : "#FF1A8C",
 });
-const AUTO_GENRE_PAIRS: Array<{ A: GenreInfo; B: GenreInfo }> = [
-  { A: genre("A", "Soca", "SOC"), B: genre("B", "Afrobeats", "AFR") },
-  { A: genre("A", "Dancehall", "DHL"), B: genre("B", "Pop", "POP") },
-  { A: genre("A", "Reggae", "REG"), B: genre("B", "Tropical House", "TRP") },
-  { A: genre("A", "Country", "CTY"), B: genre("B", "Pop Rock", "RCK") },
-  { A: genre("A", "Afrobeats", "AFR"), B: genre("B", "Dancehall", "DHL") },
-  { A: genre("A", "Pop", "POP"), B: genre("B", "Soca", "SOC") },
-  { A: genre("A", "Tropical House", "TRP"), B: genre("B", "Country", "CTY") },
-  { A: genre("A", "Pop Rock", "RCK"), B: genre("B", "Reggae", "REG") },
+// The full battle roster — every genre must have a tempo in tempo.ts so Suno
+// gets a sensible BPM. Each round picks TWO at random for the vote.
+const GENRE_POOL: Array<{ name: string; short: string }> = [
+  { name: "Soca", short: "SOC" },
+  { name: "Afrobeats", short: "AFR" },
+  { name: "Dancehall", short: "DHL" },
+  { name: "Reggae", short: "REG" },
+  { name: "Tropical House", short: "TRP" },
+  { name: "Pop", short: "POP" },
+  { name: "Country", short: "CTY" },
+  { name: "Pop Rock", short: "RCK" },
+  { name: "Hip-Hop", short: "HIP" },
+  { name: "Techno", short: "TEC" },
+  { name: "Soul", short: "SOL" },
+  { name: "Dubstep", short: "DUB" },
+  { name: "Folk", short: "FLK" },
 ];
-let genreA: GenreInfo = { ...AUTO_GENRE_PAIRS[0]!.A };
-let genreB: GenreInfo = { ...AUTO_GENRE_PAIRS[0]!.B };
+
+// Remember the genres used in the last few rounds so we don't keep re-running the
+// same matchups. We pick from genres NOT seen recently when we can.
+let recentGenres: string[] = [];
+
+function pickGenrePair(): { A: GenreInfo; B: GenreInfo } {
+  const fresh = GENRE_POOL.filter((g) => !recentGenres.includes(g.name));
+  const pool = fresh.length >= 2 ? fresh : GENRE_POOL.slice();
+  const a = pool[Math.floor(Math.random() * pool.length)]!;
+  let b = a;
+  let guard = 0;
+  while (b.name === a.name && guard++ < 30) b = pool[Math.floor(Math.random() * pool.length)]!;
+  if (b.name === a.name) {
+    const others = GENRE_POOL.filter((g) => g.name !== a.name);
+    b = others[Math.floor(Math.random() * others.length)]!;
+  }
+  recentGenres.push(a.name, b.name);
+  while (recentGenres.length > 8) recentGenres.shift(); // ~4 rounds of memory
+  return { A: genre("A", a.name, a.short), B: genre("B", b.name, b.short) };
+}
+let genreA: GenreInfo = genre("A", GENRE_POOL[0]!.name, GENRE_POOL[0]!.short);
+let genreB: GenreInfo = genre("B", GENRE_POOL[1]!.name, GENRE_POOL[1]!.short);
 let gatherSeconds = CONFIG.gatherSeconds;
 let collectSeconds = CONFIG.collectSeconds;
 
@@ -147,8 +174,9 @@ export function reset(): void {
   pendingGenreOverride = null;
   endedRecap = null;
   setSongs = [];
-  genreA = { ...AUTO_GENRE_PAIRS[0]!.A };
-  genreB = { ...AUTO_GENRE_PAIRS[0]!.B };
+  genreA = genre("A", GENRE_POOL[0]!.name, GENRE_POOL[0]!.short);
+  genreB = genre("B", GENRE_POOL[1]!.name, GENRE_POOL[1]!.short);
+  recentGenres = [];
   if (startStallTimer) {
     clearTimeout(startStallTimer);
     startStallTimer = null;
@@ -365,16 +393,15 @@ export function endVote(): void {
  */
 function beginGathering(): void {
   roundIndex += 1;
-  const automaticPair = AUTO_GENRE_PAIRS[autoGenrePairIndex % AUTO_GENRE_PAIRS.length]!;
-  autoGenrePairIndex += 1;
   if (pendingGenreOverride) {
     genreA = { ...pendingGenreOverride.A };
     genreB = { ...pendingGenreOverride.B };
     pendingGenreOverride = null;
     genreSource = "dj";
   } else {
-    genreA = { ...automaticPair.A };
-    genreB = { ...automaticPair.B };
+    const pair = pickGenrePair(); // two random genres, avoiding recent repeats
+    genreA = pair.A;
+    genreB = pair.B;
     genreSource = "auto";
   }
   // Round boundary: reset the tug + clear EVERYONE so each round starts fresh —

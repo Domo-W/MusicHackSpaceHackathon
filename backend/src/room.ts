@@ -124,6 +124,19 @@ export function isHost(connKey: string): boolean {
   return connKey === hostKey;
 }
 
+/** Authorize a host action by connection OR by the host token. If the token
+ *  matches but the connKey differs (the host reconnected with a new socket),
+ *  reclaim host onto this connection so future checks pass too. Makes host_start
+ *  / host_end robust to the connection dropping and reconnecting mid-show. */
+export function authorizeHost(connKey: string, token: string | undefined): boolean {
+  if (connKey === hostKey) return true;
+  if (token && hostToken && token === hostToken) {
+    hostKey = connKey;
+    return true;
+  }
+  return false;
+}
+
 /** Add a simulated player as a room member so it counts toward the crowd. Never
  *  becomes host. Caller (sim.ts) broadcasts room_state once after a batch. */
 export function addSimMember(key: string, name: string): void {

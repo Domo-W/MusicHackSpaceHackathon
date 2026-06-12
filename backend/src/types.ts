@@ -67,8 +67,8 @@ export type ClientMsg =
   // phone / audience
   | { type: "join"; name: string; code?: string; hostToken?: string }
   | { type: "create_room" } // big screen → mint a lobby code
-  | { type: "host_start" } // host phone → start the show
-  | { type: "host_end" } // host phone → end the show
+  | { type: "host_start"; hostToken?: string } // host phone → start the show
+  | { type: "host_end"; hostToken?: string } // host phone → end the show
   | { type: "add_sim_players"; count?: number } // host phone (dev) → add fake players to test solo
   | { type: "answer"; participantId: string; text: string }
   | { type: "pull"; participantId: string; side: Side; impulse: number } // tug tap (batched client-side ~250ms)

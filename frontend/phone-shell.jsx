@@ -61,6 +61,8 @@ function PhoneShell() {
   const [hostName, setHostName] = useState(null);
   const [started, setStarted] = useState(false); // reactive show-started flag (drives host buttons)
   const [roomCount, setRoomCount] = useState(0); // live crowd size, for the waiting room
+  const [endArmed, setEndArmed] = useState(false); // two-tap End show (no native confirm)
+  const endArmTimer = useRef(null);
 
   const seq = participated ? SEQ_RETURNING : SEQ_NEW;
   const screen = seq[Math.min(step, seq.length - 1)];
@@ -363,13 +365,17 @@ function PhoneShell() {
         </div>
       )}
 
-      {/* End show — host only, top-right so it never overlaps the name/intent
-          input controls at the bottom of the screen. */}
+      {/* End show — host only. Two-tap to confirm (no native confirm() dialog,
+          which is unreliable on mobile). Top-right; the vote countdown is
+          left-aligned (see .vs-timer-head) so it never sits under this. */}
       {started && isHost ? (
         <button
-          onClick={() => { if (confirm('End the show and go to the recap?')) window.PhoneRoom.endShow(); }}
-          style={{ position: 'fixed', top: 'calc(env(safe-area-inset-top, 0px) + 12px)', right: 12, padding: '7px 13px', borderRadius: 999, border: '1px solid rgba(255,26,140,0.6)', background: 'rgba(10,10,16,0.66)', backdropFilter: 'blur(6px)', color: '#FF7A9F', fontSize: 11, letterSpacing: '0.05em', zIndex: 40 }}
-        >End show</button>
+          onClick={() => {
+            if (endArmed) { if (endArmTimer.current) clearTimeout(endArmTimer.current); setEndArmed(false); window.PhoneRoom.endShow(); }
+            else { setEndArmed(true); if (endArmTimer.current) clearTimeout(endArmTimer.current); endArmTimer.current = setTimeout(() => setEndArmed(false), 3000); }
+          }}
+          style={{ position: 'fixed', top: 'calc(env(safe-area-inset-top, 0px) + 10px)', right: 12, padding: '7px 13px', borderRadius: 999, border: '1px solid ' + (endArmed ? '#FF1A8C' : 'rgba(255,26,140,0.5)'), background: endArmed ? '#FF1A8C' : 'rgba(10,10,16,0.72)', backdropFilter: 'blur(6px)', color: endArmed ? '#0A0A0F' : '#FF7A9F', fontWeight: endArmed ? 700 : 400, fontSize: 11, letterSpacing: '0.05em', zIndex: 40 }}
+        >{endArmed ? 'Tap again to end' : 'End show'}</button>
       ) : null}
       </React.Fragment>
       )}
@@ -463,7 +469,7 @@ function VoteScreen() {
         <span className="vs-fill" style={{ height: pct[side] + '%' }} />
         <span className="vs-genre">{g.name}</span>
         <span className="vs-pct">{pct[side]}<i>%</i></span>
-        <span className="vs-cta"><i className="vs-dot" />TAP TO PULL</span>
+        <span className="vs-cta"><i className="vs-dot" />TAP TO WIN</span>
       </button>
     );
   };
@@ -482,7 +488,7 @@ function VoteScreen() {
         </div>
         <div className="vs-timer-bar"><i style={{ width: (timeFrac * 100) + '%' }} /></div>
       </div>
-      <div className="vs-kicker">TAP FAST TO PULL YOUR GENRE</div>
+      <div className="vs-kicker">TAP YOUR GENRE — LOUDEST WINS THE NEXT SONG</div>
       <div className="vs-grid">{btn('A')}{btn('B')}</div>
     </div>
   );
