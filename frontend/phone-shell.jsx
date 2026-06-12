@@ -497,6 +497,28 @@ function VoteScreen() {
   const collecting = !!t.collecting;
   const timeFrac = tt > 0 ? Math.max(0, Math.min(1, tr / tt)) : 0;
 
+  // Lockstep: the battle is only LIVE while the big screen is collecting votes.
+  // Until then (the gather window, right after locking in your intent) hold on a
+  // "you're in" screen so the phone never jumps to voting ahead of the stage.
+  if (!collecting) {
+    const ga = (G.A && G.A.name) || '', gb = (G.B && G.B.name) || '';
+    const ca = (G.A && G.A.color) || '#00E5FF', cb = (G.B && G.B.color) || '#FF1A8C';
+    return (
+      <div className="screen votescreen vs-hold">
+        <div className="vs-hold-k"><i className="vs-dot" />YOU'RE LOCKED IN</div>
+        <div className="vs-hold-title">GENRE BATTLE<br />STARTING<span className="bs-dots">…</span></div>
+        {ga && gb ? (
+          <div className="vs-hold-vs">
+            <span style={{ color: ca }}>{ga}</span>
+            <em>vs</em>
+            <span style={{ color: cb }}>{gb}</span>
+          </div>
+        ) : null}
+        <div className="vs-hold-sub">get ready to tap</div>
+      </div>
+    );
+  }
+
   return (
     <div className="screen votescreen">
       <div className="vs-timer">

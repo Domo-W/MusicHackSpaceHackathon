@@ -500,13 +500,26 @@
     });
   }
 
-  // "Start a new show" on the SET COMPLETE finale → reset back to the landing
-  // menu (closes the room, clears the recap). The host then taps START A SHOW for
-  // a fresh session. reset → show_reset re-shows the menu (menuDismissed cleared).
+  // "Start a new show" on the SET COMPLETE finale → ONE-CLICK restart: reset the
+  // old show (closes the room, clears the recap + everyone's playlist view), then
+  // open a fresh room and drop straight into the new lobby — no second tap, no
+  // detour through the landing menu. Phones self-heal off the playlist into the
+  // new room via the room_state broadcast.
   var newShowBtn = document.getElementById("newShowBtn");
   if (newShowBtn) {
     newShowBtn.addEventListener("click", function () {
+      if (newShowBtn.disabled) return;
+      newShowBtn.disabled = true;
       Net.send({ type: "reset" });
+      if (window.AudioEngine && AudioEngine.unblock) AudioEngine.unblock();
+      // Let the reset close the old room server-side, then open the new one and
+      // force past the menu (show_reset clears menuDismissed; we re-set it here).
+      setTimeout(function () {
+        menuDismissed = true;
+        Net.send({ type: "create_room" });
+        applyStageState();
+        newShowBtn.disabled = false;
+      }, 700);
     });
   }
 
