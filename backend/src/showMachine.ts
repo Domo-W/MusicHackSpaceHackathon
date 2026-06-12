@@ -428,7 +428,10 @@ function beginGathering(): void {
   gatherTimer = setTimeout(beginVoting, gatherSeconds * 1000);
 
   startTugLoop();
-  console.log(`[show] gathering (name cloud) round ${roundIndex} for ${gatherSeconds}s`);
+  // Now that gather is live (stage has cleared/flipped to the gather screen),
+  // trickle any sim players' intents onto the feed like real people typing.
+  sim.postIntentsToGather();
+  console.log(`[show] gathering round ${roundIndex} for ${gatherSeconds}s`);
   broadcastShowState();
 }
 
@@ -699,4 +702,10 @@ export function handlePull(participantId: string, side: Side, impulse: number): 
 
 export function handleAnswer(participantId: string, text: string): void {
   participants.setAnswer(participantId, text);
+  // Surface intents on the stage's gather screen as they come in, so the crowd
+  // sees "what everyone wants tonight" populate live before the vote opens.
+  const t = (text || "").trim();
+  if (t && (phase === "gathering" || phase === "collecting")) {
+    broadcast({ type: "intent", name: participants.nameOf(participantId) || "", text: t });
+  }
 }

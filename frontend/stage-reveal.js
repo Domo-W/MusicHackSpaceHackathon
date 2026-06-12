@@ -85,6 +85,41 @@
   var lobbyCodeEl = document.getElementById("lobbyCode");
   var lobbyQrImg = document.querySelector(".lobby-qr img");
   var lobbyBed = document.getElementById("lobbyBed");
+  // gather-screen intent feed
+  var intentFeed = document.getElementById("intentFeed");
+  var intentEmpty = document.getElementById("intentEmpty");
+  var lastTugPhase = "";
+  function clearIntents() {
+    if (!intentFeed) return;
+    var cards = intentFeed.querySelectorAll(".if-card");
+    for (var i = 0; i < cards.length; i++) cards[i].remove();
+    if (intentEmpty) intentEmpty.style.display = "";
+  }
+  function stripIntentPrefix(s) {
+    var out = String(s || "").replace(/^\s*(i\s*want\s*to|i\s*wanna|i\s*want\s*2|i\s*wna)\s*/i, "").trim();
+    return out || String(s || "");
+  }
+  Net.on("intent", function (m) {
+    if (!m || !m.text || !intentFeed) return;
+    if (intentEmpty) intentEmpty.style.display = "none";
+    var card = document.createElement("div");
+    card.className = "if-card";
+    if (m.name) {
+      var n = document.createElement("span");
+      n.className = "if-name";
+      n.textContent = m.name; // audience input → textContent
+      card.appendChild(n);
+    }
+    var tx = document.createElement("span");
+    tx.className = "if-text";
+    tx.textContent = stripIntentPrefix(m.text); // audience input → textContent
+    card.appendChild(tx);
+    intentFeed.appendChild(card);
+    void card.offsetWidth; // reflow so the fade/slide-in animates
+    card.classList.add("in");
+    var all = intentFeed.querySelectorAll(".if-card");
+    while (all.length > 14) { all[0].remove(); all = intentFeed.querySelectorAll(".if-card"); }
+  });
   var roomState = { code: null, lobbyState: "closed", hostName: null, crowd: 0 };
   var showStarted = false;
   // The menu is a LANDING page: it stays put until the operator clicks START A
@@ -249,6 +284,8 @@
     ended = false;
     showStarted = false;
     menuDismissed = false; // a reset returns the stage to the landing menu
+    lastTugPhase = "";
+    clearIntents();
     document.body.classList.remove("ended");
     applyStageState();
   });
@@ -270,6 +307,11 @@
     // gather window; it flips to the tug battle only once voting opens.
     var isLobby = m.phase === "idle" || m.phase === "gathering";
     document.body.classList.toggle("lobby", isLobby);
+    // During the gather window show the "I want to…" question + intent feed
+    // (vs the join name-cloud pre-show). Clear the feed when a new round opens.
+    document.body.classList.toggle("gathering", m.phase === "gathering");
+    if (m.phase === "gathering" && lastTugPhase !== "gathering") clearIntents();
+    lastTugPhase = m.phase;
 
     // The "cooking" hold (reveal) stays up through generation; it drops only when
     // the next song actually starts (→ "gathering") or we reset (→ "idle").

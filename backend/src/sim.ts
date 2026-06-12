@@ -30,7 +30,7 @@ const INTENTS = [
   "I want to set the room on fire",
 ];
 
-interface Sim { key: string; name: string; pid: string | null; bias: number }
+interface Sim { key: string; name: string; pid: string | null; bias: number; intent: string }
 
 let sims: Sim[] = [];
 let seq = 0;
@@ -66,9 +66,10 @@ export function add(n: number): number {
     const name = freshName();
     const key = `sim-${++seq}`;
     const pid = participants.join(name, true);
-    participants.setAnswer(pid, freshIntent());
+    const intent = freshIntent();
+    participants.setAnswer(pid, intent);
     room.addSimMember(key, name);
-    sims.push({ key, name, pid, bias: 0.35 + Math.random() * 0.3 });
+    sims.push({ key, name, pid, bias: 0.35 + Math.random() * 0.3, intent });
     broadcast({ type: "name", name });
   }
   broadcast({ type: "room_state", ...room.snapshot() });
@@ -80,8 +81,20 @@ export function add(n: number): number {
 export function rejoinForRound(): void {
   for (const s of sims) {
     s.pid = participants.join(s.name, true);
-    participants.setAnswer(s.pid, freshIntent());
+    s.intent = freshIntent();
+    participants.setAnswer(s.pid, s.intent);
     broadcast({ type: "name", name: s.name });
+  }
+}
+
+/** Post the sims' intents onto the stage's gather feed, staggered like real
+ *  people typing — called once gather is live so they don't get cleared by the
+ *  new-round wipe. Mirrors what real phones do via handleAnswer. */
+export function postIntentsToGather(): void {
+  for (const s of sims) {
+    const name = s.name;
+    const text = s.intent;
+    setTimeout(() => broadcast({ type: "intent", name, text }), 800 + Math.random() * 6000);
   }
 }
 

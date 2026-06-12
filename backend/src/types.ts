@@ -98,6 +98,7 @@ export type ServerMsg =
   | { type: "room_state"; code: string | null; lobbyState: LobbyState; hostName: string | null; crowd: number }
   | { type: "name"; name: string } // a participant just joined — add to the name cloud
   | { type: "names"; names: string[] } // full snapshot (sent on connect; cleared on reset)
+  | { type: "intent"; name: string; text: string } // an "I want to…" answer, for the gather-screen feed
   | { type: "vibe_options"; cards: string[] } // the DJ's Pick-the-Vibe options (phones render these)
   | { type: "vibe_tally"; counts: number[]; total: number } // live picks per option index
   // ~15Hz tug + crowd snapshot (the authoritative aggregate; clients render/integrate locally)

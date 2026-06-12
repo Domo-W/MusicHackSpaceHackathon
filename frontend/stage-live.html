@@ -244,6 +244,26 @@
       border: none; background: #FF1A8C; color: #0A0A0F; font-family: var(--disp); font-weight: 700;
       font-size: 17px; letter-spacing: 0.05em; box-shadow: 0 0 50px rgba(255,26,140,0.45); transition: transform .12s ease; }
     .ended-newshow:active { transform: scale(0.96); }
+    /* ---- GATHER SCREEN: "I want to…" question + intents populating ---- */
+    .intent-screen { display: none; flex: 1 1 auto; flex-direction: column; min-height: 0; }
+    body.gathering #nameCloud { display: none; }
+    body.gathering .intent-screen { display: flex; }
+    body.gathering .lobby-hero .lobby-tag, body.gathering .lobby-steps, body.gathering .lj-wait { display: none; }
+    .is-question { flex: 0 0 auto; font-family: var(--disp); font-weight: 800; font-size: 44px; line-height: 1;
+      letter-spacing: 0.01em; margin: 10px 0 18px;
+      background: linear-gradient(90deg, var(--cyan), #fff 60%, var(--magenta));
+      -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .intent-feed { flex: 1 1 auto; display: flex; flex-wrap: wrap; align-content: flex-start; gap: 12px 14px;
+      overflow: hidden; padding: 4px 0; position: relative; }
+    .if-empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: flex-start;
+      font-family: var(--mono); font-size: 20px; color: rgba(255,255,255,0.28); }
+    .if-card { display: inline-flex; flex-direction: column; gap: 4px; padding: 12px 18px; border-radius: 16px;
+      background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12); max-width: 100%;
+      opacity: 0; transform: translateY(10px); transition: opacity .5s ease, transform .5s ease; }
+    .if-card.in { opacity: 1; transform: translateY(0); }
+    .if-card .if-name { font-family: var(--mono); font-weight: 700; font-size: 12px; letter-spacing: 0.16em;
+      text-transform: uppercase; color: var(--cyan); }
+    .if-card .if-text { font-family: var(--disp); font-weight: 600; font-size: 24px; line-height: 1.1; color: #fff; }
     /* ---- LOBBY ROOM CODE ---- */
     .lobby-code-wrap { display: flex; flex-direction: column; align-items: center; gap: 4px; margin-bottom: 6px; }
     .lobby-code-kicker { font-family: var(--mono); font-size: 13px; letter-spacing: 0.3em; color: rgba(255,255,255,0.5); }
@@ -360,6 +380,14 @@
       </div>
       <div id="nameCloud" class="name-cloud">
         <div class="cloud-empty" id="cloudEmpty">be the first in — scan to join</div>
+      </div>
+      <!-- Gather screen: the "I want to…" question + intents populating live.
+           Shown (instead of the name cloud) once the host starts the show. -->
+      <div id="intentScreen" class="intent-screen">
+        <div class="is-question">TONIGHT, I WANT TO…</div>
+        <div id="intentFeed" class="intent-feed">
+          <div class="if-empty" id="intentEmpty">type your “I want to…” on your phone</div>
+        </div>
       </div>
     </div>
     <div class="lobby-join">

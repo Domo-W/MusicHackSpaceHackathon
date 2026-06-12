@@ -55,6 +55,12 @@ export function count(): number {
   return byId.size;
 }
 
+/** A participant's display name (for broadcasting their intent to the stage). */
+export function nameOf(participantId: string): string | null {
+  const p = byId.get(participantId);
+  return p ? p.name : null;
+}
+
 /** All joined names, in join order (for the stage name cloud). */
 export function names(): string[] {
   return [...byId.values()].map((p) => p.name);
