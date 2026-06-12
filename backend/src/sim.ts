@@ -65,7 +65,7 @@ export function add(n: number): number {
   for (let i = 0; i < n; i++) {
     const name = freshName();
     const key = `sim-${++seq}`;
-    const pid = participants.join(name);
+    const pid = participants.join(name, true);
     participants.setAnswer(pid, freshIntent());
     room.addSimMember(key, name);
     sims.push({ key, name, pid, bias: 0.35 + Math.random() * 0.3 });
@@ -79,7 +79,7 @@ export function add(n: number): number {
  *  a FRESH intent (kept varied round to round) and re-show their name. */
 export function rejoinForRound(): void {
   for (const s of sims) {
-    s.pid = participants.join(s.name);
+    s.pid = participants.join(s.name, true);
     participants.setAnswer(s.pid, freshIntent());
     broadcast({ type: "name", name: s.name });
   }

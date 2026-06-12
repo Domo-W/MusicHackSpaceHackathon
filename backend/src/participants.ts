@@ -7,17 +7,18 @@ interface Participant {
   id: string;
   name: string;
   answer: string | null; // this round's intent; null = hasn't answered yet
+  sim: boolean; // a simulated/test player — real players win selection over these
 }
 
 const byId = new Map<string, Participant>();
 let seq = 0;
 let lastSelectedId: string | null = null; // avoid picking the same person twice in a row
 
-/** Register a participant; returns their stable id. */
-export function join(name: string): string {
+/** Register a participant; returns their stable id. `sim` marks test players. */
+export function join(name: string, sim = false): string {
   seq += 1;
   const id = `p${seq}`;
-  byId.set(id, { id, name: name.trim() || `Guest ${seq}`, answer: null });
+  byId.set(id, { id, name: name.trim() || `Guest ${seq}`, answer: null, sim });
   return id;
 }
 
@@ -70,9 +71,14 @@ export function selectRandomAnswerer(): { name: string; answer: string } | null 
     (p): p is Participant & { answer: string } => p.answer !== null && p.answer.length > 0,
   );
   if (answered.length === 0) return null; // nobody submitted — caller skips generation
+  // Real (human) players win over simulated test players: if ANY real player
+  // answered, pick from them — so a solo host surrounded by test players always
+  // wins their own song. Sims are only selectable when no real player answered.
+  const real = answered.filter((p) => !p.sim);
+  const pool = real.length > 0 ? real : answered;
   // Avoid repeating the immediately-previous selection when there's a choice.
-  const fresh = answered.length > 1 ? answered.filter((p) => p.id !== lastSelectedId) : answered;
-  const choices = fresh.length > 0 ? fresh : answered;
+  const fresh = pool.length > 1 ? pool.filter((p) => p.id !== lastSelectedId) : pool;
+  const choices = fresh.length > 0 ? fresh : pool;
   const pick = choices[Math.floor(Math.random() * choices.length)]!;
   lastSelectedId = pick.id;
   return { name: pick.name, answer: pick.answer };
