@@ -9,6 +9,7 @@ import { genreBpm, pickGenreBpm } from "./tempo.js";
 import * as participants from "./participants.js";
 import * as vibes from "./vibes.js";
 import * as tug from "./tug.js";
+import { sanitizeIntent } from "./sanitize.js";
 import type { GenreInfo, Phase, SavedSong, Seed, ShowState, Side, Song } from "./types.js";
 
 // The real Between Sets flow, built on the generate-one-ahead spine.
@@ -753,10 +754,14 @@ export function handlePull(participantId: string, side: Side, impulse: number): 
 }
 
 export function handleAnswer(participantId: string, text: string): void {
-  participants.setAnswer(participantId, text);
+  // Scrub the typed intent at the source: a slur/curse here would otherwise be
+  // projected on the stage, stored as the seed, and built into the lyrics — one
+  // bad word could fail the whole generation. Clean it once, here.
+  const clean = sanitizeIntent(text || "");
+  participants.setAnswer(participantId, clean);
   // Surface intents on the stage's gather screen as they come in, so the crowd
   // sees "what everyone wants tonight" populate live before the vote opens.
-  const t = (text || "").trim();
+  const t = clean.trim();
   if (t && (phase === "gathering" || phase === "collecting")) {
     broadcast({ type: "intent", name: participants.nameOf(participantId) || "", text: t });
   }

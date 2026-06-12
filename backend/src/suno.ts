@@ -1,4 +1,15 @@
 import { CONFIG } from "./config.js";
+import {
+  parseBlockedWord,
+  noteBlockedWord,
+  sanitizeStyle,
+  sanitizeLyrics,
+  sanitizeTitle,
+} from "./sanitize.js";
+
+// How many times to deterministically strip a Suno-named offending word and
+// re-submit before giving up (and letting the caller's LLM re-craft take over).
+const MAX_WORD_STRIPS = 3;
 
 export interface GenOpts {
   lyrics: string;
@@ -80,6 +91,42 @@ export async function generateSong(
   cb: { onPlayable?: (url: string, status: string) => void; signal?: AbortSignal } = {},
 ): Promise<GenerateResult> {
   const t0 = Date.now();
+  // Deterministic first line of defense: scrub known offenders (profanity, slurs,
+  // Suno false-positive artist/producer tags) before the request ever goes out.
+  let attempt: GenOpts = {
+    ...opts,
+    style: sanitizeStyle(opts.style),
+    lyrics: sanitizeLyrics(opts.lyrics),
+    title: sanitizeTitle(opts.title),
+  };
+
+  for (let strips = 0; ; strips++) {
+    try {
+      return await submitAndPoll(attempt, cb, t0);
+    } catch (err) {
+      // If Suno NAMED the offending word, strip it everywhere and re-submit — far
+      // faster + more reliable than an LLM re-craft. Generic rejections (no word
+      // named) bubble up to the caller's strict re-craft fallback.
+      const word = parseBlockedWord((err as Error).message);
+      if (!word || strips >= MAX_WORD_STRIPS) throw err;
+      noteBlockedWord(word);
+      console.warn(`[suno] rejected on "${word}" — stripping it and resubmitting (strip ${strips + 1}/${MAX_WORD_STRIPS})`);
+      attempt = {
+        ...attempt,
+        style: sanitizeStyle(attempt.style),
+        lyrics: sanitizeLyrics(attempt.lyrics),
+        title: sanitizeTitle(attempt.title),
+      };
+    }
+  }
+}
+
+/** One submit + poll-to-complete cycle. */
+async function submitAndPoll(
+  opts: GenOpts,
+  cb: { onPlayable?: (url: string, status: string) => void; signal?: AbortSignal },
+  t0: number,
+): Promise<GenerateResult> {
   const id = await submitGeneration(opts);
   let playableUrl = "";
   let msToPlayable = 0;
