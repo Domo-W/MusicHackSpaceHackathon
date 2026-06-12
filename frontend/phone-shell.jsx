@@ -19,6 +19,7 @@ const { useState, useEffect, useRef, useCallback, useLayoutEffect } = React;
 // EVERYONE walks the whole flow every round — name → intent → vote. Returning
 // participants don't auto-skip the name screen; they re-confirm with a Continue
 // tap (their join is idempotent, so no duplicate) before stating a fresh intent.
+const MIN_PLAYERS = 2; // a show needs at least this many in the room to start
 const SEQ_NEW = ['name', 'intent', 'vote'];
 const SEQ_RETURNING = ['name', 'intent', 'vote'];
 
@@ -59,6 +60,7 @@ function PhoneShell() {
   const [isHost, setIsHost] = useState(() => !!(window.PhoneRoom && window.PhoneRoom.isHost()));
   const [hostName, setHostName] = useState(null);
   const [started, setStarted] = useState(false); // reactive show-started flag (drives host buttons)
+  const [roomCount, setRoomCount] = useState(0); // live crowd size, for the waiting room
 
   const seq = participated ? SEQ_RETURNING : SEQ_NEW;
   const screen = seq[Math.min(step, seq.length - 1)];
@@ -190,6 +192,7 @@ function PhoneShell() {
     const onRoom = (e) => {
       const m = e.detail;
       setHostName(m ? m.hostName : null);
+      if (m && typeof m.crowd === 'number') setRoomCount(m.crowd);
       // Self-heal: a room is open/live → phone-net has adopted its code, so skip
       // the manual code screen and let the user join the current room.
       if (m && (m.lobbyState === 'open' || m.lobbyState === 'live') && m.code) {
@@ -258,6 +261,54 @@ function PhoneShell() {
     );
   }
 
+  // ---- waiting room: you're in, before the host starts the show ----
+  // Shown once joined and before the show starts. Confirms the join, shows the
+  // live room count, and gives the host the START button (others see a waiting
+  // status). Auto-replaced by the name→intent→vote flow the moment the show starts.
+  if (joined && !started && !ended && !loading) {
+    const myName = (window.__participantName || '').toUpperCase();
+    const waitInner = (
+      <div className="phone">
+        <Background />
+        <div className="screen" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 16, padding: '70px 26px 40px', textAlign: 'center', boxSizing: 'border-box' }}>
+          <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 11, letterSpacing: '0.3em', color: '#8C8C9C' }}>YOU'RE IN</div>
+          <div style={{ fontFamily: "'Space Grotesk',system-ui,sans-serif", fontWeight: 800, fontSize: 38, lineHeight: 1.04, background: 'linear-gradient(90deg,#00E5FF,#FF1A8C)', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent', wordBreak: 'break-word' }}>{myName || 'YOU'}</div>
+          <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 14, letterSpacing: '0.08em', color: '#B48CFF' }}>
+            <b style={{ color: '#fff', fontSize: 18 }}>{roomCount}</b> in the room
+          </div>
+          <div style={{ marginTop: 18, width: '100%', maxWidth: 320 }}>
+            {isHost ? (
+              roomCount >= MIN_PLAYERS ? (
+                <button
+                  onClick={() => window.PhoneRoom.startShow()}
+                  style={{ width: '100%', padding: '16px 20px', borderRadius: 999, border: 'none', background: '#FF1A8C', color: '#0A0A0F', fontFamily: "'Space Grotesk',system-ui,sans-serif", fontWeight: 700, fontSize: 15, letterSpacing: '0.05em', boxShadow: '0 0 40px rgba(255,26,140,0.4)' }}
+                >👑 EVERYBODY'S IN — START</button>
+              ) : (
+                <div style={{ fontFamily: "'Space Grotesk',system-ui,sans-serif", fontSize: 15, color: '#8C8C9C' }}>
+                  you're the host — waiting for at least 1 more player to join<span className="bs-dots">…</span>
+                </div>
+              )
+            ) : (
+              <div style={{ fontFamily: "'Space Grotesk',system-ui,sans-serif", fontSize: 15, color: '#8C8C9C' }}>
+                waiting for {hostName || 'the host'} to start the show<span className="bs-dots">…</span>
+              </div>
+            )}
+          </div>
+        </div>
+        <style>{'@keyframes bsdots{0%{opacity:.2}50%{opacity:1}100%{opacity:.2}} .bs-dots{animation:bsdots 1.4s ease-in-out infinite}'}</style>
+      </div>
+    );
+    return isMobile ? (
+      <div id="stage" className="stage-bare">{waitInner}</div>
+    ) : (
+      <div id="stage">
+        <div style={{ transform: `scale(${scale})`, transformOrigin: 'center center' }}>
+          <IOSDevice dark width={402} height={874}>{waitInner}</IOSDevice>
+        </div>
+      </div>
+    );
+  }
+
   // ---- render ----
   // The actual app surface. On real mobile it fills the screen directly; on desktop
   // it sits inside the simulated-iPhone preview frame.
@@ -287,18 +338,8 @@ function PhoneShell() {
         </div>
       </div>
 
-      {/* host controls — shown on the name screen pre-show, or End button during show */}
-      {!loading && screen === 'name' && !started && isHost ? (
-        <div className="shell-foot">
-          <button
-            onClick={() => window.PhoneRoom.startShow()}
-            style={{ marginTop: 14, padding: '14px 24px', borderRadius: 999, border: 'none', background: '#FF1A8C', color: '#0A0A0F', fontWeight: 700, letterSpacing: '0.05em', width: '100%' }}
-          >👑 EVERYBODY'S IN — START</button>
-        </div>
-      ) : null}
-      {!loading && screen === 'name' && !started && !isHost && hostName ? (
-        <div style={{ marginTop: 14, textAlign: 'center', fontSize: 12, color: '#8C8C9C', padding: '0 18px 12px' }}>waiting for {hostName} to start the show</div>
-      ) : null}
+      {/* (Pre-show host START / waiting status now live on the dedicated waiting
+          room screen, shown once joined and before the show starts.) */}
 
       {/* footer Next — only VIBE needs it (name auto-advances on join;
           intent self-advances on send; vote is round-driven) */}

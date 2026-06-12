@@ -142,6 +142,7 @@ let wsSeq = 0; // stable per-socket id for the vibe tally (distinct phones per o
 // newly-crowned phone with host_granted. WeakMap can't iterate, so use a Map and
 // clean it up on close.
 const wsByKey = new Map<string, WebSocket>();
+const MIN_PLAYERS = 2; // a show needs at least this many in the room to start
 
 // Tally helpers shared by the vibe message + disconnect paths.
 const vibeTallyMsg = (): ServerMsg => {
@@ -228,7 +229,9 @@ wss.on("connection", (ws) => {
       }
       case "host_start": {
         const s = room.snapshot();
-        if (room.isHost(connKey) && s.lobbyState === "open" && s.crowd >= 1) {
+        // A show needs at least MIN_PLAYERS in the room (host + ≥1 other). The
+        // phone hides START below this, but enforce it server-side too.
+        if (room.isHost(connKey) && s.lobbyState === "open" && s.crowd >= MIN_PLAYERS) {
           room.markLive();
           startShow();
         }
