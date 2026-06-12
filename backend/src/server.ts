@@ -26,6 +26,7 @@ import {
 import { join, remove, names } from "./participants.js";
 import * as vibes from "./vibes.js";
 import * as room from "./room.js";
+import * as sim from "./sim.js";
 import { songStore } from "./songStore.js";
 import type { ClientMsg, ServerMsg } from "./types.js";
 
@@ -241,6 +242,15 @@ wss.on("connection", (ws) => {
         if (room.isHost(connKey)) {
           room.markEnded();
           void endShow();
+        }
+        break;
+      }
+      case "add_sim_players": {
+        // Dev/test: the host fills the room with fake players so a solo tester can
+        // hit the 2-player minimum and run a believable show alone.
+        if (room.isHost(connKey)) {
+          const n = Math.min(Math.max(1, msg.count ?? 4), 12);
+          sim.add(n);
         }
         break;
       }

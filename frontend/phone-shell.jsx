@@ -115,8 +115,13 @@ function PhoneShell() {
       setEnded(true);
       setLoading(false);
     });
-    // a fresh show (reset) clears the recap so the walkthrough returns.
-    const offReset = window.Net.on('show_reset', () => { setEnded(false); setRecapTracks([]); });
+    // a fresh show (reset / "start a new show") clears the recap AND the old join
+    // so the phone is ready to join the NEW session cleanly from the name screen.
+    const offReset = window.Net.on('show_reset', () => {
+      setEnded(false); setRecapTracks([]);
+      setStarted(false); setJoined(false); setStep(0);
+      if (window.__resetJoinState) window.__resetJoinState();
+    });
     // Authoritative backend flow state — drives loading/reveal/walkthrough.
     const offShow = window.Net.on('show_state', (m) => {
       if (!m) return;
@@ -273,10 +278,11 @@ function PhoneShell() {
         <div className="screen" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 16, padding: '70px 26px 40px', textAlign: 'center', boxSizing: 'border-box' }}>
           <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 11, letterSpacing: '0.3em', color: '#8C8C9C' }}>YOU'RE IN</div>
           <div style={{ fontFamily: "'Space Grotesk',system-ui,sans-serif", fontWeight: 800, fontSize: 38, lineHeight: 1.04, background: 'linear-gradient(90deg,#00E5FF,#FF1A8C)', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent', wordBreak: 'break-word' }}>{myName || 'YOU'}</div>
-          <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 14, letterSpacing: '0.08em', color: '#B48CFF' }}>
-            <b style={{ color: '#fff', fontSize: 18 }}>{roomCount}</b> in the room
+          <div className="bs-countpulse" style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: "'JetBrains Mono',monospace", fontSize: 14, letterSpacing: '0.08em', color: '#B48CFF' }}>
+            <span className="bs-livedot" />
+            <span><b style={{ color: '#fff', fontSize: 18 }}>{roomCount}</b> in the room</span>
           </div>
-          <div style={{ marginTop: 18, width: '100%', maxWidth: 320 }}>
+          <div style={{ marginTop: 18, width: '100%', maxWidth: 320, display: 'flex', flexDirection: 'column', gap: 12 }}>
             {isHost ? (
               roomCount >= MIN_PLAYERS ? (
                 <button
@@ -293,9 +299,17 @@ function PhoneShell() {
                 waiting for {hostName || 'the host'} to start the show<span className="bs-dots">…</span>
               </div>
             )}
+            {isHost ? (
+              <button
+                onClick={() => window.PhoneRoom.addSimPlayers(4)}
+                style={{ width: '100%', padding: '11px 16px', borderRadius: 999, border: '1px solid rgba(0,229,255,0.4)', background: 'transparent', color: '#7fdfff', fontFamily: "'Space Grotesk',system-ui,sans-serif", fontWeight: 600, fontSize: 12.5, letterSpacing: '0.04em' }}
+              >＋ Add test players</button>
+            ) : null}
           </div>
         </div>
-        <style>{'@keyframes bsdots{0%{opacity:.2}50%{opacity:1}100%{opacity:.2}} .bs-dots{animation:bsdots 1.4s ease-in-out infinite}'}</style>
+        <style>{"@keyframes bsdots{0%{opacity:.2}50%{opacity:1}100%{opacity:.2}} .bs-dots{animation:bsdots 1.4s ease-in-out infinite}" +
+          "@keyframes bspulse{0%{opacity:.55;transform:scale(1)}50%{opacity:1;transform:scale(1.04)}100%{opacity:.55;transform:scale(1)}} .bs-countpulse{animation:bspulse 1.8s ease-in-out infinite}" +
+          "@keyframes bsdot{0%{box-shadow:0 0 0 0 rgba(45,211,111,.5)}70%{box-shadow:0 0 0 7px rgba(45,211,111,0)}100%{box-shadow:0 0 0 0 rgba(45,211,111,0)}} .bs-livedot{width:8px;height:8px;border-radius:50%;background:#2dd36f;display:inline-block;animation:bsdot 1.6s ease-out infinite}"}</style>
       </div>
     );
     return isMobile ? (
@@ -349,11 +363,12 @@ function PhoneShell() {
         </div>
       )}
 
-      {/* End show button for host during an active show */}
+      {/* End show — host only, top-right so it never overlaps the name/intent
+          input controls at the bottom of the screen. */}
       {started && isHost ? (
         <button
           onClick={() => { if (confirm('End the show and go to the recap?')) window.PhoneRoom.endShow(); }}
-          style={{ position: 'fixed', bottom: 10, right: 10, padding: '8px 14px', borderRadius: 999, border: '1px solid #FF1A8C', background: 'transparent', color: '#FF7A9F', fontSize: 11, letterSpacing: '0.05em', zIndex: 30 }}
+          style={{ position: 'fixed', top: 'calc(env(safe-area-inset-top, 0px) + 12px)', right: 12, padding: '7px 13px', borderRadius: 999, border: '1px solid rgba(255,26,140,0.6)', background: 'rgba(10,10,16,0.66)', backdropFilter: 'blur(6px)', color: '#FF7A9F', fontSize: 11, letterSpacing: '0.05em', zIndex: 40 }}
         >End show</button>
       ) : null}
       </React.Fragment>

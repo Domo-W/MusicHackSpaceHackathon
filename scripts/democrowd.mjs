@@ -70,13 +70,26 @@ function pickShoutName(i) {
 }
 
 function makeClient(i) {
-  const c = { id: i, ws: null, pid: null, myRound: 0, alive: true, tapHz: jitter(1.5, 4.5) };
+  const c = { id: i, ws: null, pid: null, myRound: 0, alive: true, joinSent: false, tapHz: jitter(1.5, 4.5) };
   const ws = new WebSocket(URL, { perMessageDeflate: false, headers: { "User-Agent": "between-sets-democrowd" } });
   c.ws = ws;
   ws.on("open", () => { connected++; });
   ws.on("message", (raw) => {
     let m; try { m = JSON.parse(raw.toString()); } catch { return; }
-    if (m.type === "joined") {
+    if (m.type === "room_state") {
+      // Join the lobby only once a HOST already exists (the real human host), so a
+      // bot never steals the host slot by joining the empty lobby first. Staggered
+      // so the wall fills naturally. This also satisfies the 2-player minimum.
+      if (!c.joinSent && m.hostName && (m.lobbyState === "open" || m.lobbyState === "live")) {
+        c.joinSent = true;
+        setTimeout(() => {
+          if (c.alive && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: "join", name: pickShoutName(i), code: CODE || undefined }));
+            joins++;
+          }
+        }, jitter(400, 6000));
+      }
+    } else if (m.type === "joined") {
       c.pid = m.participantId;
       // Intent lands a beat after the name — like a real person reading the next screen.
       setTimeout(() => {

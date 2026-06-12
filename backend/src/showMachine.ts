@@ -1,6 +1,7 @@
 import { CONFIG } from "./config.js";
 import { broadcast } from "./bus.js";
 import * as room from "./room.js";
+import * as sim from "./sim.js";
 import { craftSongPrompt, craftOpenerPrompt } from "./agent.js";
 import { generateSong } from "./suno.js";
 import { songStore } from "./songStore.js";
@@ -162,6 +163,7 @@ export function reset(): void {
   }
   tug.reset(genreA, genreB);
   room.close();
+  sim.reset();
   participants.reset();
   vibes.reset();
   console.log("[show] reset → blank lobby");
@@ -383,6 +385,7 @@ function beginGathering(): void {
     tug.reset(genreA, genreB);
     participants.reset();
     broadcast({ type: "names", names: [] }); // clear the stage name cloud immediately
+    sim.rejoinForRound(); // re-register any simulated players with fresh intents
   }
   phase = "gathering";
   endedRecap = null; // a new round means the set is live again, not in recap
@@ -429,6 +432,7 @@ function extendCollecting(): void {
 function startTugLoop(): void {
   if (tugLoop) return;
   tugLoop = setInterval(() => {
+    if (phase === "collecting") sim.voteTick(); // simulated players vote in the tug
     tug.tick();
     broadcastTug();
   }, Math.round(1000 / SNAPSHOT_HZ));

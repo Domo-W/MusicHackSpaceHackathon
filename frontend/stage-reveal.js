@@ -209,12 +209,16 @@
 
   Net.on("show_ended", function (m) {
     ended = true;
+    // Stop the audio — otherwise the last song keeps looping under the finale
+    // (the engine loops the current track to avoid dead air mid-show).
+    if (AudioEngine.reset) AudioEngine.reset();
     var tracks = (m && Array.isArray(m.songs)) ? m.songs : [];
     if (endTracksEl) endTracksEl.textContent = tracks.length;
     if (endCrowdEl) endCrowdEl.textContent = lastCrowd;
     buildCredits(tracks);
     document.body.classList.remove("lobby");
     document.body.classList.add("ended");
+    applyStageState(); // show the cursor (finale has the "new show" button)
   });
   Net.on("show_reset", function () {
     ended = false;
@@ -426,6 +430,16 @@
       // The click is the audio-unlock gesture; retry any blocked playback later.
       if (window.AudioEngine && AudioEngine.unblock) AudioEngine.unblock();
       applyStageState();
+    });
+  }
+
+  // "Start a new show" on the SET COMPLETE finale → reset back to the landing
+  // menu (closes the room, clears the recap). The host then taps START A SHOW for
+  // a fresh session. reset → show_reset re-shows the menu (menuDismissed cleared).
+  var newShowBtn = document.getElementById("newShowBtn");
+  if (newShowBtn) {
+    newShowBtn.addEventListener("click", function () {
+      Net.send({ type: "reset" });
     });
   }
 

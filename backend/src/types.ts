@@ -69,6 +69,7 @@ export type ClientMsg =
   | { type: "create_room" } // big screen → mint a lobby code
   | { type: "host_start" } // host phone → start the show
   | { type: "host_end" } // host phone → end the show
+  | { type: "add_sim_players"; count?: number } // host phone (dev) → add fake players to test solo
   | { type: "answer"; participantId: string; text: string }
   | { type: "pull"; participantId: string; side: Side; impulse: number } // tug tap (batched client-side ~250ms)
   | { type: "vibe"; index: number } // phone's current Pick-the-Vibe selection (option index)

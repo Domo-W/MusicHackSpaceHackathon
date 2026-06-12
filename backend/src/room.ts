@@ -124,6 +124,15 @@ export function isHost(connKey: string): boolean {
   return connKey === hostKey;
 }
 
+/** Add a simulated player as a room member so it counts toward the crowd. Never
+ *  becomes host. Caller (sim.ts) broadcasts room_state once after a batch. */
+export function addSimMember(key: string, name: string): void {
+  if (!members.find((m) => m.key === key)) {
+    members.push({ key, name });
+    disarmEmptyTimer();
+  }
+}
+
 export function markLive(): void {
   if (lobbyState === "open") {
     lobbyState = "live";

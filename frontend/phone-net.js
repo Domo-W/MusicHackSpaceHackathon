@@ -194,6 +194,7 @@
     crowd: function () { return window.__roomCrowd || 0; },
     startShow: function () { if (window.Net) window.Net.send({ type: "host_start" }); },
     endShow: function () { if (window.Net) window.Net.send({ type: "host_end" }); },
+    addSimPlayers: function (n) { if (window.Net) window.Net.send({ type: "add_sim_players", count: n || 4 }); },
   };
 
   /* ============================================================
