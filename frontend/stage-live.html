@@ -205,10 +205,13 @@
 
     /* ---- COLD-START MENU ---- */
     #menu { position: fixed; inset: 0; z-index: 90; display: none;
-      /* same venue photo as the sign-up lobby, dimmed so the wordmark reads */
+      /* same venue photo as the sign-up lobby, dimmed so the wordmark reads.
+         The solid #07070B base layer keeps the menu OPAQUE even before the photo
+         loads, so the battle canvas underneath never flashes through on cold start. */
       background:
         linear-gradient(rgba(6,6,10,0.40), rgba(6,6,10,0.58)),
-        url('assets/lobby-bg.jpg') center / cover no-repeat;
+        url('assets/lobby-bg.jpg') center / cover no-repeat,
+        #07070B;
       align-items: center; justify-content: center; text-align: center; }
     body.menu #menu { display: flex; }
     /* The menu (z90) covers the lobby/battle/canvas below it; only the audio-gate
