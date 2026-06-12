@@ -523,6 +523,26 @@
     });
   }
 
+  // Operator escape hatch: Alt+Shift+R from the stage forces a full recover —
+  // reset the show and open a fresh lobby — even when no phone is host (e.g.
+  // everyone reloaded mid-show and the live page is stuck on the battle with no
+  // way out). `reset` needs no host auth server-side, so this always works.
+  function recoverToFreshLobby() {
+    Net.send({ type: "reset" });
+    if (window.AudioEngine && AudioEngine.unblock) AudioEngine.unblock();
+    setTimeout(function () {
+      menuDismissed = true;
+      Net.send({ type: "create_room" });
+      applyStageState();
+    }, 700);
+  }
+  document.addEventListener("keydown", function (e) {
+    if (e.altKey && e.shiftKey && (e.key === "R" || e.key === "r")) {
+      e.preventDefault();
+      if (window.confirm("Reset the show and open a fresh lobby?")) recoverToFreshLobby();
+    }
+  });
+
   // Cold start: show the menu until room_state/show_state say otherwise.
   document.body.classList.add("menu");
   applyStageState();

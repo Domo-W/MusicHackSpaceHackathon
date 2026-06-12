@@ -110,7 +110,10 @@ export function tryJoin(
     broadcastState();
     return { ok: true, isHost: true, hostToken };
   }
-  if (hostKey === null && lobbyState === "open") {
+  // Take an empty host seat — in an OPEN lobby (the normal first-joiner case) or
+  // during a LIVE show whose host vanished (everyone reloaded mid-show): the next
+  // phone to (re)connect becomes host so end/reset controls are never orphaned.
+  if (hostKey === null && (lobbyState === "open" || lobbyState === "live")) {
     hostKey = connKey;
     hostToken = genToken();
     broadcastState();
@@ -176,11 +179,12 @@ export function leave(connKey: string):
     broadcastState();
     return { hostChanged: true, newHostKey: hostKey, newHostToken: hostToken };
   }
-  // Host left during live/ended — clear the stale reference so isHost() stops
-  // returning true for a dead socket.
+  // Host left during live/ended — clear the dead socket but KEEP hostToken so the
+  // host can reclaim it on reload (phones persist it in sessionStorage). If they
+  // don't come back, the next phone to (re)join takes the empty host seat via
+  // tryJoin, so the show is never left without end/reset controls.
   if (connKey === hostKey) {
     hostKey = null;
-    hostToken = null;
     broadcastState();
     return { hostChanged: false };
   }

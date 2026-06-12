@@ -85,6 +85,11 @@ const cancelledGenerationJobs = new Set<number>();
 let songSequence = 0;
 let currentBpm = CONFIG.defaultBpm;
 let lastPlayingId = "";
+// The track currently broadcast as the live song (opener, generated, or fallback).
+// Kept so a stage that reloads mid-show can be re-seeded with it and resume audio
+// instead of sitting silent on whatever phase show_state reports. Cleared on
+// reset/end (the lobby/recap has no live track).
+let currentSong: Song | null = null;
 let activeSeed: Seed | undefined;
 let generationError: string | undefined;
 let genreSource: "auto" | "dj" = "auto";
@@ -105,6 +110,22 @@ const songBpms = new Map<string, number>();
 // `started` guard. Self-heal back to the lobby instead.
 const STARTUP_STALL_MS = 3 * 60_000;
 let startStallTimer: NodeJS.Timeout | null = null;
+
+// Jackbox-style "the show never hard-stops": if a buzzer fires with no intents,
+// re-open the vote ONCE (a slow crowd gets a second window) and then auto-advance
+// with a house seed rather than looping the battle forever. Counts empty buzzers
+// within the current round; reset when a round resolves or a new one begins.
+const EMPTY_ROUND_GRACE = 1;
+let emptyRounds = 0;
+// On-brand default prompts the house uses when the crowd stays silent, so the
+// generated lyrics still read like a crowd request instead of going blank.
+const HOUSE_INTENTS = [
+  "keep the party going",
+  "dance like nobody's watching",
+  "turn it all the way up",
+  "lose ourselves on the floor",
+  "make tonight unforgettable",
+];
 
 let collectEndsAt = 0; // epoch ms when the current collecting window buzzes
 let gatherEndsAt = 0; // epoch ms when the name-cloud window opens voting
@@ -146,6 +167,14 @@ export function currentRecap(): SavedSong[] | null {
   return endedRecap;
 }
 
+/** The live track right now (else null) — to re-seed a stage that reloads mid-show
+ *  so it resumes audio instead of sitting silent on the genre battle. */
+export function currentPlayingSong(): Song | null {
+  if (!currentSong) return null;
+  // Prefer the seekable final file once it has arrived (the stream URL can expire).
+  return { ...currentSong, streamUrl: currentSong.finalUrl || currentSong.streamUrl };
+}
+
 /** Songs generated during the CURRENT set (cleared on reset/start) — the
  *  dashboard's Session Setlist, distinct from the full cross-set archive. */
 export function currentSetSongs(): SavedSong[] {
@@ -169,6 +198,8 @@ export function reset(): void {
   phase = "idle";
   currentBpm = CONFIG.defaultBpm;
   lastPlayingId = "";
+  currentSong = null;
+  emptyRounds = 0;
   activeSeed = undefined;
   generationError = undefined;
   genreSource = "auto";
@@ -215,6 +246,7 @@ export async function endShow(): Promise<void> {
   started = false;
   held = false;
   phase = "idle";
+  currentSong = null; // recap takes over; a reconnecting stage shows the finale, not a live track
   if (startStallTimer) {
     clearTimeout(startStallTimer);
     startStallTimer = null;
@@ -261,6 +293,7 @@ function playOpenerTrack(): void {
     finalUrl: OPENER_URL,
   };
   songBpms.set(id, currentBpm);
+  currentSong = song;
   console.log(`[show] opener → playing fixed track ${OPENER_URL}`);
   broadcast({ type: "song_ready", song });
 }
@@ -395,6 +428,7 @@ export function endVote(): void {
  */
 function beginGathering(): void {
   roundIndex += 1;
+  emptyRounds = 0; // a fresh round gets its own grace window before auto-advancing
   if (pendingGenreOverride) {
     genreA = { ...pendingGenreOverride.A };
     genreB = { ...pendingGenreOverride.B };
@@ -515,12 +549,28 @@ function onBuzzer(): void {
 function resolveAndGenerate(): void {
   const picked = participants.selectRandomAnswerer();
   if (!picked) {
-    // Nobody submitted an intent — don't invent a song. Re-open the SAME round's
-    // vote window (no round bump / genre churn) until someone submits.
-    console.log(`[show] round ${roundIndex} → no submissions; waiting for the crowd`);
-    extendCollecting();
+    emptyRounds += 1;
+    if (emptyRounds <= EMPTY_ROUND_GRACE) {
+      // Nobody submitted yet — re-open the SAME round's vote window once (no round
+      // bump / genre churn) so a slow crowd gets a second chance to type.
+      console.log(`[show] round ${roundIndex} → no submissions; re-opening (grace ${emptyRounds}/${EMPTY_ROUND_GRACE})`);
+      extendCollecting();
+      return;
+    }
+    // Still silent after the grace window — keep the show moving with a house seed
+    // (genre already decided by the tug) instead of stalling on the battle forever.
+    const houseSide: Side = tug.winner();
+    const houseGenre = houseSide === "A" ? genreA.name : genreB.name;
+    const houseAnswer = HOUSE_INTENTS[Math.floor(Math.random() * HOUSE_INTENTS.length)]!;
+    const houseSeed: Seed = { name: "THE CROWD", answer: houseAnswer, genre: houseGenre, vibe: vibes.winner() ?? undefined };
+    broadcast({ type: "round_result", winner: houseSide, genre: houseGenre, name: houseSeed.name, answer: houseSeed.answer, roundIndex });
+    console.log(`[show] round ${roundIndex} → silent after grace; auto-advancing with house seed (${houseGenre})`);
+    activeSeed = houseSeed;
+    generationError = undefined;
+    void generateNext(houseSeed);
     return;
   }
+  emptyRounds = 0;
   const winnerSide: Side = tug.winner();
   const genre = winnerSide === "A" ? genreA.name : genreB.name;
   const { name, answer } = picked;
@@ -597,6 +647,7 @@ async function generateNext(seed: Seed, opts?: { opener?: boolean }): Promise<vo
     if (!isCurrentJob()) return;
     playableSent = true;
     song.streamUrl = url;
+    currentSong = song; // live ref — onComplete fills finalUrl so reloads get the seekable file
     console.log(`[show] ${id}: playable (streaming) → sending to stage; gate released`);
     broadcast({ type: "song_ready", song: { ...song } });
     releaseGate(); // next round may begin now
@@ -687,6 +738,7 @@ async function playFallbackSong(): Promise<void> {
       finalUrl: pick.downloadUrl,
     };
     songBpms.set(fallback.id, pick.bpm);
+    currentSong = fallback;
     console.log(`[show] generation failed — falling back to archived track "${pick.title}" by ${pick.name}`);
     broadcast({ type: "song_ready", song: fallback });
   } catch (err) {

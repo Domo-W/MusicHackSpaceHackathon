@@ -1,5 +1,24 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
+// Keep generation inert: an empty round now auto-advances with a house seed, which
+// would otherwise call the real Anthropic/Suno APIs when timers run far enough.
+vi.mock("./agent.js", () => ({
+  craftSongPrompt: vi.fn(async () => ({ title: "T", lyrics: "la la", style: "pop 120bpm" })),
+  craftOpenerPrompt: vi.fn(async () => ({ title: "T", lyrics: "la la", style: "pop 120bpm" })),
+}));
+vi.mock("./suno.js", () => ({
+  generateSong: vi.fn(async (_p: unknown, cb: { onPlayable?: (u: string, s: string) => void } = {}) => {
+    cb.onPlayable?.("http://test/stream.m4a", "streaming");
+    return { finalUrl: "http://test/final.m4a", msToComplete: 1 };
+  }),
+}));
+vi.mock("./songStore.js", () => ({
+  songStore: {
+    save: vi.fn(async (song: Record<string, unknown>) => ({ ...song, fileName: "t.m4a", downloadUrl: "http://test/final.m4a" })),
+    list: vi.fn(async () => []),
+  },
+}));
+
 // showMachine starts intervals at module load — import under fake timers so the
 // watchdog (and the snapshot loops) run on the controlled clock.
 vi.useFakeTimers();

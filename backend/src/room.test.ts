@@ -152,6 +152,41 @@ describe("room host authorization + lifecycle", () => {
     expect(room.isHost("host")).toBe(false);
   });
 
+  it("lets the host reclaim via token after dropping during a LIVE show (reload)", () => {
+    // Repro of the stuck-show incident: host reloads mid-show. leave() must keep
+    // the hostToken alive so the reconnecting host reclaims end/reset controls.
+    const open = room.createRoom();
+    const c = open.ok ? open.code : "";
+    const first = room.tryJoin("host", "Maya", c, undefined);
+    const token = first.ok ? first.hostToken : undefined;
+    room.tryJoin("g1", "Theo", c, undefined);
+    room.markLive();
+    room.leave("host"); // host's socket drops on reload
+    expect(room.snapshot().hostName).toBe(null); // no live host for the moment
+    const rejoin = room.tryJoin("host-reconnect", "Maya", c, token);
+    expect(rejoin.ok).toBe(true);
+    if (rejoin.ok) expect(rejoin.isHost).toBe(true);
+    expect(room.isHost("host-reconnect")).toBe(true);
+  });
+
+  it("lets the next phone take the empty host seat during a LIVE show if the host is gone", () => {
+    // Host closed the tab for good mid-show. The next phone to (re)join becomes
+    // host so the show is never left without end/reset controls.
+    const open = room.createRoom();
+    const c = open.ok ? open.code : "";
+    room.tryJoin("host", "Maya", c, undefined);
+    room.tryJoin("g1", "Theo", c, undefined);
+    room.markLive();
+    room.leave("host");
+    const res = room.tryJoin("g1-reconnect", "Theo", c, undefined); // no host token
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.isHost).toBe(true);
+      expect(typeof res.hostToken).toBe("string");
+    }
+    expect(room.isHost("g1-reconnect")).toBe(true);
+  });
+
   it("a promoted host can reclaim via the newHostToken returned by leave()", () => {
     const open = room.createRoom();
     const c = open.ok ? open.code : "";

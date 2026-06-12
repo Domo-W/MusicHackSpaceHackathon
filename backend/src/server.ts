@@ -23,6 +23,7 @@ import {
   currentShowState,
   currentRecap,
   currentSetSongs,
+  currentPlayingSong,
 } from "./showMachine.js";
 import { join, remove, names } from "./participants.js";
 import * as vibes from "./vibes.js";
@@ -253,6 +254,11 @@ wss.on("connection", (ws) => {
   // phone scanning the end-of-set QR lands on the playlist, not the lobby.
   const recap = currentRecap();
   if (recap) ws.send(JSON.stringify({ type: "show_ended", songs: recap } as ServerMsg));
+  // If a track is live right now, re-seed this connection with it so a stage that
+  // reloaded mid-show resumes audio (and starts reporting `playing` so rounds
+  // advance again) instead of sitting silent on whatever phase show_state reports.
+  const liveSong = currentPlayingSong();
+  if (liveSong) ws.send(JSON.stringify({ type: "song_ready", song: liveSong } as ServerMsg));
 
   ws.on("message", (raw) => {
     let msg: ClientMsg;
