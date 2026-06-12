@@ -123,6 +123,23 @@
       padding-top: env(safe-area-inset-top);
       padding-bottom: env(safe-area-inset-bottom);
     }
+
+    /* ---- Playlist link opened on DESKTOP: present the saved set as a real web
+       page (full-bleed venue backdrop + a centered, comfortably-wide column),
+       not the simulated-iPhone preview used by the live join flow. ---- */
+    #stage.playlist-web {
+      position:fixed; inset:0; overflow-y:auto; display:flex;
+      justify-content:center; align-items:flex-start;
+      background:
+        linear-gradient(180deg, rgba(7,7,11,0.85), rgba(7,7,11,0.94)),
+        url('assets/lobby-bg.jpg') center / cover no-repeat fixed,
+        #07070B;
+    }
+    .playlist-web .playlist-web-col {
+      position:relative; width:100%; max-width:540px; min-height:100dvh;
+      box-shadow:0 0 120px rgba(0,0,0,0.55);
+    }
+    .playlist-web .phone { position:relative; height:auto; min-height:100dvh; }
   </style>
 </head>
 <body>
@@ -159,8 +176,8 @@
   <script type="text/babel" src="screen-intent.jsx?v=13"></script>
   <!-- merged from design-handoff: the end-of-set recap (playlist player) -->
   <script src="setlist.js?v=1"></script>
-  <script type="text/babel" src="screen-recap.jsx?v=1"></script>
-  <script type="text/babel" src="phone-shell.jsx?v=11"></script>
+  <script type="text/babel" src="screen-recap.jsx?v=2"></script>
+  <script type="text/babel" src="phone-shell.jsx?v=12"></script>
 
   <!-- phone glue: join (NAME) + answer (INTENT). Loaded LAST.
        Plain vanilla JS (no Babel) — net.js/net-crowd.js are plain scripts

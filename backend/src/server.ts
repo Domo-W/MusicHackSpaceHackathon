@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import os from "node:os";
 import path from "node:path";
 import express from "express";
+import archiver from "archiver";
 import QRCode from "qrcode";
 import { WebSocketServer, WebSocket } from "ws";
 import { CONFIG } from "./config.js";
@@ -28,7 +29,7 @@ import * as vibes from "./vibes.js";
 import * as room from "./room.js";
 import * as sim from "./sim.js";
 import { songStore } from "./songStore.js";
-import type { ClientMsg, ServerMsg } from "./types.js";
+import type { ClientMsg, ServerMsg, SavedSong } from "./types.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const frontendDir = path.resolve(__dirname, "../../frontend");
@@ -78,26 +79,78 @@ app.get("/api/session-songs", (_req, res) => res.json({ songs: currentSetSongs()
 // after the show ends (and after later sessions). The setId is the epoch-ms time
 // of the set's first song; we cluster the archive the same way the dashboard does
 // (25-min gap) and return the matching set's songs, oldest-first.
+// Group the archive into "sets" — songs within 25 min of each other belong to the
+// same night — and return the one containing the given set id (its first song's epoch).
+async function findSetSongs(setId: number): Promise<SavedSong[] | null> {
+  const all = await songStore.list();
+  const sorted = [...all].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  const GAP = 25 * 60 * 1000;
+  const sets: SavedSong[][] = [];
+  let cur: SavedSong[] | null = null;
+  let last = 0;
+  for (const s of sorted) {
+    const t = Date.parse(s.createdAt);
+    if (!cur || t - last > GAP) { cur = []; sets.push(cur); }
+    cur.push(s);
+    last = t;
+  }
+  return sets.find((g) => g.some((s) => Date.parse(s.createdAt) === setId)) ?? null;
+}
+
 app.get("/api/playlist/:setId", async (req, res) => {
   try {
-    const setId = Number(req.params.setId);
-    const all = await songStore.list();
-    const sorted = [...all].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-    const GAP = 25 * 60 * 1000;
-    const sets: (typeof all)[] = [];
-    let cur: typeof all | null = null;
-    let last = 0;
-    for (const s of sorted) {
-      const t = Date.parse(s.createdAt);
-      if (!cur || t - last > GAP) { cur = []; sets.push(cur); }
-      cur.push(s);
-      last = t;
-    }
-    const set = sets.find((g) => g.some((s) => Date.parse(s.createdAt) === setId));
+    const set = await findSetSongs(Number(req.params.setId));
     res.json({ songs: set ?? [] });
   } catch (err) {
     console.error("[playlist] failed:", (err as Error).message);
     res.status(500).json({ error: "Could not load the playlist." });
+  }
+});
+
+// Download the whole set as ONE .zip — the only reliable "save all" on mobile,
+// where browsers allow just one file per tap. Streams each track (local file or
+// remote Supabase URL) into the archive so nothing buffers the whole set at once.
+app.get("/api/playlist/:setId/zip", async (req, res) => {
+  try {
+    const setId = Number(req.params.setId);
+    const set = await findSetSongs(setId);
+    if (!set || set.length === 0) {
+      res.status(404).json({ error: "Set not found." });
+      return;
+    }
+    res.setHeader("Content-Type", "application/zip");
+    res.setHeader("Content-Disposition", `attachment; filename="between-sets-${setId}.zip"`);
+    const archive = archiver("zip", { store: true }); // audio is already compressed
+    archive.on("warning", (err) => console.warn("[zip] warning:", err.message));
+    archive.on("error", (err) => {
+      console.error("[zip] failed:", err.message);
+      if (!res.headersSent) res.status(500).end();
+      else res.destroy();
+    });
+    archive.pipe(res);
+    const used = new Set<string>();
+    let n = 0;
+    for (const song of set) {
+      const target = await songStore.fileFor(song.id);
+      if (!target) continue;
+      // de-dupe names within the zip; prefix track order for a tidy listing
+      let name = `${String(++n).padStart(2, "0")} ${song.fileName}`;
+      while (used.has(name)) name = `${name.replace(/\.[^.]+$/, "")}_.${song.fileName.split(".").pop()}`;
+      used.add(name);
+      if (target.filePath) {
+        archive.file(target.filePath, { name });
+      } else if (target.url) {
+        const resp = await fetch(target.url);
+        if (resp.ok && resp.body) {
+          const buf = Buffer.from(await resp.arrayBuffer());
+          archive.append(buf, { name });
+        }
+      }
+    }
+    await archive.finalize();
+  } catch (err) {
+    console.error("[zip] failed:", (err as Error).message);
+    if (!res.headersSent) res.status(500).json({ error: "Could not build the set download." });
   }
 });
 app.get("/api/songs/:id/download", async (req, res) => {

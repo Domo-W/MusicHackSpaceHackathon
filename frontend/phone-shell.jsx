@@ -400,6 +400,17 @@ function PhoneShell() {
     </div>
   );
 
+  // A shared playlist link (?set=) opened on a desktop/laptop should read as a real
+  // web page — full-bleed brand backdrop + a centered column — not the simulated
+  // iPhone preview (fake status bar + bezel) that the live join flow uses.
+  if (playlistView && !isMobile) {
+    return (
+      <div id="stage" className="playlist-web">
+        <div className="playlist-web-col">{phoneInner}</div>
+      </div>
+    );
+  }
+
   // Real phone → fill the screen (no fake device frame). Desktop → framed preview.
   const Stage = isMobile ? (
     <div id="stage" className="stage-bare">{phoneInner}</div>

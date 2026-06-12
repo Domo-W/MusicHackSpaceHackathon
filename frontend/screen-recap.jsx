@@ -143,6 +143,17 @@ function ScreenRecap({ onBack, tracks: propTracks, playlistUrl }) {
     ping('Track saved ✓');
   };
   const saveAll = () => {
+    // One .zip is the ONLY reliable "save all" on mobile — browsers allow just one
+    // file per tap, so looping per-track downloads silently drops all but the first.
+    let setId = null;
+    try { setId = new URL(playlistUrl || location.href, location.origin).searchParams.get('set'); } catch (e) {}
+    const markAll = () => setSavedIds(Object.fromEntries(tracks.map((t) => [t.id, true])));
+    if (setId) {
+      downloadFile('/api/playlist/' + encodeURIComponent(setId) + '/zip', 'between-sets-' + setId + '.zip');
+      markAll(); setAllSaved(true); ping('Downloading the set ✓'); haptic([10, 40, 10]);
+      return;
+    }
+    // Fallback (no set id yet): best-effort per-track.
     const all = {};
     tracks.forEach((t) => { all[t.id] = true; if (t.downloadUrl) downloadFile(t.downloadUrl, t.fileName); });
     setSavedIds(all); setAllSaved(true); ping('All tracks saved ✓'); haptic([10, 40, 10]);
