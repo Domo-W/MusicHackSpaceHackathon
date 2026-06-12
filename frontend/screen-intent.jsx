@@ -39,6 +39,33 @@ function ScreenIntent({ active, onAdvance }) {
     return () => clearTimeout(id);
   }, [active]);
 
+  // Lock-in countdown so this step has a hard, predictable time limit and the
+  // phone stays in lockstep with the stage. The intent must be in before the
+  // gather window closes and voting opens; when it closes we auto-submit whatever
+  // is typed and advance to the vote — so your words still count and everyone
+  // moves to voting together (no arriving at voting before others).
+  const [secsLeft, setSecsLeft] = React.useState(null);
+  const submittedRef = React.useRef(false);
+  const valRef = React.useRef('');
+  React.useEffect(() => { valRef.current = val; }, [val]);
+  React.useEffect(() => {
+    if (!active || !window.Net || !window.Net.on) return;
+    submittedRef.current = false;
+    const off = window.Net.on('tug', (m) => {
+      if (!m) return;
+      if (m.phase === 'gathering' && typeof m.timeRemaining === 'number') {
+        setSecsLeft(Math.max(0, Math.ceil(m.timeRemaining)));
+      } else if (m.phase === 'collecting' && !submittedRef.current) {
+        submittedRef.current = true;
+        setSecsLeft(0);
+        const t = (valRef.current || '').trim();
+        if (t) { try { window.IntentSink && window.IntentSink.submit(t); } catch (e) {} }
+        onAdvance && onAdvance(); // lockstep: jump to the vote the instant it opens
+      }
+    });
+    return off;
+  }, [active]);
+
   // dissolve: emit neon particles drifting upward from the text
   const runParticles = () => {
     const cv = canvasRef.current; if (!cv) return;
@@ -75,6 +102,7 @@ function ScreenIntent({ active, onAdvance }) {
 
   const submit = () => {
     if (!canSubmit) return;
+    submittedRef.current = true;          // claim the submit so auto-submit won't double-fire
     haptic([0, 30, 30, 60]);
     IntentSink.submit(val.trim());        // -> isolated handler (mock; swap for backend)
     setSubmitting(true);
@@ -95,7 +123,7 @@ function ScreenIntent({ active, onAdvance }) {
   return (
     <div className="screen intent">
       <div className="intent-head">
-        <span className="screen-kicker">JOIN THE ROOM</span>
+        <span className="screen-kicker">JOIN THE ROOM{secsLeft != null && secsLeft > 0 ? ' · ' + secsLeft + 'S TO LOCK IN' : ''}</span>
         <h1 className="intent-title">{who ? who.toUpperCase() + ' WANTS TO' : 'I WANT TO'}<span className="it-dots">…</span></h1>
       </div>
 
