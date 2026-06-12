@@ -67,7 +67,7 @@
     }
     @keyframes rvpulse { 0%,100% { opacity: 0.4; } 50% { opacity: 1; } }
 
-    /* ---- LOBBY (phase idle): big "scan to join" while waiting for the DJ ---- */
+    /* ---- LOBBY (phase idle): big "scan to join" while waiting for the host ---- */
     #lobby {
       position: fixed; inset: 0; z-index: 75; display: none;
       align-items: center; justify-content: center;
@@ -331,7 +331,7 @@
   <div id="revealTicker" data-on="0"></div>
   <div id="revealOverlay" data-on="0"></div>
 
-  <!-- LOBBY (phase idle): big scan-to-join while waiting for the DJ to start -->
+  <!-- LOBBY (phase idle): big scan-to-join while waiting for the host to start -->
   <div id="lobby">
     <div class="lobby-aurora" aria-hidden="true"></div>
     <div class="lobby-cloud">
@@ -362,7 +362,7 @@
         <span class="gc-lbl">VOTING STARTS IN</span>
         <span class="gc-time"><b id="gcNum">15</b>s</span>
       </div>
-      <div class="lj-wait">waiting for the DJ to start…</div>
+      <div class="lj-wait">waiting for the host to start…</div>
     </div>
   </div>
 
