@@ -199,7 +199,9 @@
     /* ---- while the "next up" reveal overlay is up, hide the battle text so it
        doesn't show through; it fades back when the reveal clears. ---- */
     .overlay { transition: opacity .35s ease; }
-    body.revealing .overlay { opacity: 0; }
+    /* Clear the battle text fast when the reveal card comes up, so the two don't
+       visibly overlap while the reveal backdrop fades in. */
+    body.revealing .overlay { opacity: 0; transition: opacity .12s ease; }
 
     /* ---- COLD-START MENU ---- */
     #menu { position: fixed; inset: 0; z-index: 90; display: none;

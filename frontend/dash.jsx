@@ -22,6 +22,8 @@ const GENRES = [
   { id: 'soul', emoji: '💜', name: 'Soul' },
   { id: 'dubstep', emoji: '🔊', name: 'Dubstep' },
   { id: 'folk', emoji: '🪕', name: 'Folk' },
+  { id: 'gospel', emoji: '🙌', name: 'Gospel' },
+  { id: 'miamibass', emoji: '📻', name: 'Miami Bass' },
 ];
 const genreById = (id) => GENRES.find((g) => g.id === id);
 

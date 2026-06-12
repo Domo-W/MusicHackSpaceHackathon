@@ -10,6 +10,7 @@ export interface Seed {
   answer: string;
   genre: string;
   vibe?: string; // the crowd's winning Pick-the-Vibe mood (colors the song)
+  bpm?: number; // tempo chosen for this song (set once so it's consistent everywhere)
 }
 
 export interface Song {

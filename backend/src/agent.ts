@@ -9,6 +9,7 @@ export interface SongSeed {
   answer: string; // their answer to the performer's question
   genre: string; // the winning genre from the tug battle
   vibe?: string; // the crowd's winning Pick-the-Vibe mood (colors energy + style)
+  bpm?: number; // the chosen tempo for THIS song (set once upstream so it's consistent)
 }
 
 export interface SongPrompt {
@@ -88,7 +89,7 @@ function systemPrompt(seed: SongSeed, bpm: number, strict: boolean): string {
 }
 
 function userPrompt(seed: SongSeed): string {
-  const bpm = genreBpm(seed.genre);
+  const bpm = seed.bpm ?? genreBpm(seed.genre);
   return [
     `Name: ${seed.name}`,
     `Their answer: ${seed.answer}`,
@@ -109,7 +110,7 @@ function nameAppears(lyrics: string, name: string): boolean {
 /** Deterministic fallback if the LLM call fails or is too slow. */
 export function templatePrompt(seed: SongSeed): SongPrompt {
   const name = seed.name.trim() || "you";
-  const bpm = genreBpm(seed.genre);
+  const bpm = seed.bpm ?? genreBpm(seed.genre);
   const chorus = `[Chorus]\n${name}, this one's for you\n${seed.answer}\nTurn it up, we're breaking through`;
   const sections = [
     `[Verse]\nSomebody said it, ${name} in the crowd`,
@@ -242,7 +243,7 @@ export async function craftOpenerPrompt(seed: OpenerSeed, opts?: { strict?: bool
 /** Craft a Suno prompt from the seed. Falls back to a template on any failure.
  *  `strict` aggressively sanitizes (used to retry after a Suno content rejection). */
 export async function craftSongPrompt(seed: SongSeed, opts?: { strict?: boolean }): Promise<SongPrompt> {
-  const bpm = genreBpm(seed.genre);
+  const bpm = seed.bpm ?? genreBpm(seed.genre);
   try {
     const res = await client.messages.create({
       model: CONFIG.agentModel,

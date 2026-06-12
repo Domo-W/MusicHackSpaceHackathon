@@ -5,7 +5,7 @@ import * as sim from "./sim.js";
 import { craftSongPrompt, craftOpenerPrompt } from "./agent.js";
 import { generateSong } from "./suno.js";
 import { songStore } from "./songStore.js";
-import { genreBpm } from "./tempo.js";
+import { genreBpm, pickGenreBpm } from "./tempo.js";
 import * as participants from "./participants.js";
 import * as vibes from "./vibes.js";
 import * as tug from "./tug.js";
@@ -43,6 +43,8 @@ const GENRE_POOL: Array<{ name: string; short: string }> = [
   { name: "Soul", short: "SOL" },
   { name: "Dubstep", short: "DUB" },
   { name: "Folk", short: "FLK" },
+  { name: "Gospel", short: "GSP" },
+  { name: "Miami Bass", short: "MIA" },
 ];
 
 // Remember the genres used in the last few rounds so we don't keep re-running the
@@ -550,7 +552,8 @@ async function generateNext(seed: Seed, opts?: { opener?: boolean }): Promise<vo
   const generationSetSongs = setSongs;
   activeGenerationJobId = jobId;
   latestGeneration = { jobId, songId: id };
-  const bpm = genreBpm(seed.genre);
+  const bpm = pickGenreBpm(seed.genre); // a fresh tempo inside the genre's window
+  seed.bpm = bpm; // thread it into the agent so the prompt + style use the same value
   songBpms.set(id, bpm);
   broadcastShowState();
   let playableSent = false;
